@@ -1,0 +1,19 @@
+[package]
+name = "deckcraft-collab-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The collaboration shim compiled for node (wasm-bindgen), so OneOS can test two windows converging through its real CRDT engine"
+
+# No workspace lints: the wasm-bindgen macros expand to code the workspace's `unsafe_code = "forbid"` refuses.
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+deckcraft-model = { workspace = true }
+deckcraft-collab = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+wasm-bindgen = "0.2"

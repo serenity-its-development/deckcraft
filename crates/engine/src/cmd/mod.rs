@@ -139,9 +139,16 @@ pub fn has_text_or_shapes(s: &Session) -> std::result::Result<(), String> {
 }
 
 pub fn can_undo(s: &Session) -> std::result::Result<(), String> {
+    // In a live deck the room holds the history: Undo is always there to ask.
+    if s.collab_undo && s.active().is_some() {
+        return Ok(());
+    }
     if s.active().is_some_and(|d| !d.history.undo.is_empty()) { Ok(()) } else { Err("nothing to undo".into()) }
 }
 pub fn can_redo(s: &Session) -> std::result::Result<(), String> {
+    if s.collab_undo && s.active().is_some() {
+        return Ok(());
+    }
     if s.active().is_some_and(|d| !d.history.redo.is_empty()) { Ok(()) } else { Err("nothing to redo".into()) }
 }
 

@@ -166,7 +166,7 @@ fn every_page_renders() {
         (Page::SaveAs, "Not saved yet"),
         (Page::Print, "Print Hidden Slides"),
         (Page::Export, "Create PDF Document"),
-        (Page::Account, "About DeckCraft"),
+        (Page::Account, "About Slides"),
     ];
     for (p, marker) in checks {
         h.state_mut().run("app.backstage", json!({"page": p.id()})).unwrap();
@@ -480,7 +480,7 @@ fn a_file_that_cant_be_opened_says_why() {
     }
     h.run_steps(2);
     assert!(h.state().session.documents().is_empty());
-    assert!(h.query_by_label_contains("not a presentation DeckCraft can read").is_some(), "the error is on screen");
+    assert!(h.query_by_label_contains("not a presentation Slides can read").is_some(), "the error is on screen");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

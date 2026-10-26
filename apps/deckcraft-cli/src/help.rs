@@ -148,12 +148,6 @@ median and slowest of N runs (5 by default, 1 to 1000) as a table, or as JSON wi
 
   deckcraft-cli bench deck.pptx --runs 10",
     },
-    Subcommand {
-        name: "links",
-        usage: "links",
-        summary: "print the DeckCraft community and project links",
-        details: "Prints the DeckCraft community and project links.",
-    },
     Subcommand { name: "version", usage: "--version", summary: "print the version", details: "Prints the version of deckcraft-cli." },
 ];
 

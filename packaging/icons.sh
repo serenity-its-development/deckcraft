@@ -12,7 +12,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR="$ROOT/assets/app-icon"
-ID="ai.storyteller.deckcraft"
+ID="one.wkspace.slides"
 SRC="$DIR/deckcraft-1024.png"
 WANT="${*:-ico icns}"
 TMP="$(mktemp -d)"

@@ -12,7 +12,7 @@ set -euo pipefail
 # shellcheck source=../common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 LINUX="$ROOT/packaging/linux"
-APP_ID=ai.storyteller.deckcraft
+APP_ID=one.wkspace.slides
 
 if [[ "${1:-}" != "--skip-build" ]]; then
   (cd "$ROOT" && cargo build --release --locked -p deckcraft -p deckcraft-cli)

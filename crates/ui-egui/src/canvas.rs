@@ -944,6 +944,24 @@ fn overlays(app: &mut SlideApp, ui: &Ui, painter: &egui::Painter, xf: Xf, t: &To
     }
     let Some(st) = app.session.active() else { return };
     let sel_stroke = Stroke::new(1.0, t.selection);
+    // OneOS live editing: the shapes other people have selected on this slide, outlined in their colour with their name.
+    if let Some(slide) = st.current_slide() {
+        for peer in app.session.remote_cursors.iter().filter(|c| c.slide == slide.id) {
+            let color = Color32::from_rgb(peer.color[0], peer.color[1], peer.color[2]);
+            for id in &peer.shapes {
+                let Some(sh) = st.shape(*id) else { continue };
+                let x = deckcraft_engine::cmd::xfrm_of(&st.doc, &st.selection, sh);
+                let a = x.affine();
+                let corners = [Point::new(0.0, 0.0), Point::new(x.w, 0.0), Point::new(x.w, x.h), Point::new(0.0, x.h)].map(|q| xf.to_screen(a * q));
+                poly(painter, corners, Stroke::new(2.0, color));
+                let label = painter.layout_no_wrap(peer.name.clone(), egui::FontId::proportional(11.0), Color32::WHITE);
+                let top = corners.iter().fold(corners[0], |m, p| if p.y < m.y || (p.y == m.y && p.x < m.x) { *p } else { m });
+                let at = egui::pos2(top.x, top.y - label.size().y - 4.0);
+                painter.rect_filled(Rect::from_min_size(at - egui::vec2(3.0, 1.0), label.size() + egui::vec2(6.0, 2.0)), 3.0, color);
+                painter.galley(at, label, Color32::WHITE);
+            }
+        }
+    }
     let editing = st.selection.text.clone();
     for id in &st.selection.shapes {
         let Some(sh) = st.shape(*id) else { continue };

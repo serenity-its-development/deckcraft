@@ -4,13 +4,13 @@
 #
 #   curl -fsSLO https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
 #   python3 flatpak-cargo-generator.py Cargo.lock -o packaging/linux/flatpak/cargo-sources.json
-#   flatpak-builder --user --install --force-clean build-flatpak packaging/linux/flatpak/ai.storyteller.deckcraft.yml
-#   flatpak run ai.storyteller.deckcraft
+#   flatpak-builder --user --install --force-clean build-flatpak packaging/linux/flatpak/one.wkspace.slides.yml
+#   flatpak run one.wkspace.slides
 #
 # For Flathub, replace the `dir` source with a `git` source pinned to a release tag and commit.
-# The release's .flatpak bundles are built from ai.storyteller.deckcraft.bundle.yml instead (it
+# The release's .flatpak bundles are built from one.wkspace.slides.bundle.yml instead (it
 # repackages the Linux tarball); keep runtime-version and finish-args identical in both.
-id: ai.storyteller.deckcraft
+id: one.wkspace.slides
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
@@ -33,7 +33,7 @@ finish-args:
   # granted so decks passed by path (the command line, Open Recent) work in the usual place.
   - --filesystem=xdg-documents
   # Deliberately not granted: network (the optional --control server listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network ai.storyteller.deckcraft` exposes it to
+  # the sandbox; `flatpak override --user --share=network one.wkspace.slides` exposes it to
   # host agents) and home/host filesystem access.
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
@@ -47,14 +47,14 @@ modules:
     build-commands:
       - cargo --offline build --release --locked -p deckcraft
       - install -Dm755 target/release/deckcraft /app/bin/deckcraft
-      - install -Dm644 packaging/linux/ai.storyteller.deckcraft.desktop /app/share/applications/ai.storyteller.deckcraft.desktop
-      - install -Dm644 packaging/linux/ai.storyteller.deckcraft.mime.xml /app/share/mime/packages/ai.storyteller.deckcraft.xml
+      - install -Dm644 packaging/linux/one.wkspace.slides.desktop /app/share/applications/one.wkspace.slides.desktop
+      - install -Dm644 packaging/linux/one.wkspace.slides.mime.xml /app/share/mime/packages/one.wkspace.slides.xml
       - mkdir -p /app/share/icons && cp -R assets/app-icon/hicolor /app/share/icons/
       - >-
         version=$(awk '/^\[/{p=($0=="[workspace.package]");next} p&&$1=="version"{gsub(/[" ]/,"",$3);print $3;exit}' Cargo.toml);
         install -d /app/share/metainfo;
         sed -e "s/@VERSION@/$version/" -e "s/@DATE@/$(date -u +%Y-%m-%d)/"
-        packaging/linux/ai.storyteller.deckcraft.metainfo.xml.in > /app/share/metainfo/ai.storyteller.deckcraft.metainfo.xml
+        packaging/linux/one.wkspace.slides.metainfo.xml.in > /app/share/metainfo/one.wkspace.slides.metainfo.xml
     sources:
       - type: dir
         path: ../../..

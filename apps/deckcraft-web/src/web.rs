@@ -1,4 +1,5 @@
-//! The browser shell: web `Services`, drag-and-drop, and the eframe web runner.
+//! The browser shell: web `Services`, drag-and-drop, the eframe web runner, and (framed by OneOS) the host bridge and live
+//! editing.
 
 use deckcraft_engine::Session;
 use deckcraft_ui_egui::{Inbox, InboxEvent, InboxFile, Services, SlideApp};
@@ -22,6 +23,10 @@ pub fn start() {
             log::error!("missing <canvas id=\"{CANVAS_ID}\">");
             return;
         };
+        // OneOS host bridge: the frame page's loader declares the ONE parent origin this editor answers to
+        // (`globalThis.__craftHost`); with none declared the editor runs unframed and saves download.
+        let host = crate::host::Bridge::new();
+        let host_for_app = host.clone();
         let mut options = eframe::WebOptions::default();
         if query().contains("webgl")
             && let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup
@@ -37,9 +42,19 @@ pub fn start() {
                         log::info!("deckcraft-web {}: wgpu backend {:?}", env!("CARGO_PKG_VERSION"), rs.adapter.get_info().backend);
                     }
                     let inbox: Inbox = Inbox::default();
-                    let mut app = SlideApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));
+                    let mut services = services(inbox.clone(), cc.egui_ctx.clone());
+                    let bridge = host_for_app.clone();
+                    if let Some(b) = &bridge {
+                        b.connect(&mut services, cc.egui_ctx.clone());
+                    }
+                    let mut app = SlideApp::new(Session::new(), services);
                     let q = query();
-                    if !q.contains("blank") {
+                    if bridge.is_some() {
+                        // The host sends the file: until it does, the Start screen.
+                        if let Err(e) = app.run("app.home", serde_json::json!({"on": true})) {
+                            log::error!("start screen: {e}");
+                        }
+                    } else if !q.contains("blank") {
                         if let Err(e) = deckcraft_engine::sample::open_sample(&mut app.session) {
                             log::error!("sample deck: {e}");
                         }
@@ -49,14 +64,23 @@ pub fn start() {
                     if q.contains("show") {
                         app.start_show(0, false);
                     }
-                    Ok(Box::new(WebShell { app, inbox }))
+                    let collab = bridge.clone().map(crate::collab::Collab::new);
+                    if let Some(b) = &bridge {
+                        b.post_ready();
+                    }
+                    Ok(Box::new(WebShell { app, inbox, bridge, collab }))
                 }),
             )
             .await;
         if let Some(el) = document.get_element_by_id(LOADING_ID) {
             match result {
                 Ok(()) => el.remove(),
-                Err(e) => el.set_inner_html(&format!("<p>DeckCraft failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>")),
+                Err(e) => {
+                    if let Some(b) = &host {
+                        b.post_failed(&format!("{e:?}"));
+                    }
+                    el.set_inner_html(&format!("<p>Slides failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>"))
+                }
             }
         }
     });
@@ -71,6 +95,10 @@ fn query() -> String {
 struct WebShell {
     app: SlideApp,
     inbox: Inbox,
+    /// OneOS host bridge, when framed by it.
+    bridge: Option<crate::host::Bridge>,
+    /// Live editing through the host (`collab`), when framed by it.
+    collab: Option<crate::collab::Collab>,
 }
 
 impl eframe::App for WebShell {
@@ -97,7 +125,14 @@ impl eframe::App for WebShell {
                 }
             });
         }
+        self.host_events(ctx);
+        if let Some(collab) = self.collab.as_mut() {
+            collab.pre(&mut self.app);
+        }
         self.app.logic(ctx);
+        if let Some(collab) = self.collab.as_mut() {
+            collab.post(&mut self.app);
+        }
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
@@ -106,6 +141,34 @@ impl eframe::App for WebShell {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.app.ui(ui);
+    }
+}
+
+impl WebShell {
+    /// What the host said since the last frame: files to open, the live channel, the assistant's runs.
+    fn host_events(&mut self, ctx: &egui::Context) {
+        let Some(bridge) = self.bridge.clone() else { return };
+        for event in bridge.take_events() {
+            match event {
+                crate::host::Event::Opened(opened, bytes) => {
+                    if let Some(collab) = self.collab.as_mut() {
+                        collab.opened(&opened, &self.app);
+                    }
+                    let id = self.app.begin_host_open(&opened.name);
+                    push_inbox(&self.inbox, InboxEvent::File(InboxFile { id, name: opened.name.clone(), bytes }));
+                }
+                crate::host::Event::Command { id, method, params } => {
+                    let outcome = if method == "command.batch" { self.app.run_command_batch(&params) } else { Err(format!("unknown-method: this editor does not take `{method}`")) };
+                    bridge.answer(&id, outcome);
+                }
+                other => {
+                    if let Some(collab) = self.collab.as_mut() {
+                        collab.event(other);
+                    }
+                }
+            }
+            ctx.request_repaint();
+        }
     }
 }
 

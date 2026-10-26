@@ -50,10 +50,6 @@ Ubuntu-Font-1.0, Bitstream-Vera); Creative Commons (CC0-1.0, CC-BY-4.0, CC-BY-SA
 domain; or contributor-original (created by a contributor who licenses it under
 `MIT OR Apache-2.0`).
 
-One narrow exception: the ArtCraft name, wordmark and logos in `docs/brand/` are trademarks of the
-ArtCraft Team (not open source, terms in `docs/brand/LICENSE-brand.txt`), used only unmodified to
-identify the project.
-
 Forbidden: system fonts that are not openly licensed, vendor emoji artwork, stock photos, "free
 for personal use" material, screenshots of other people's software, anything whose licence you
 cannot prove from its original source.

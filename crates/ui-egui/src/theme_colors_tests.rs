@@ -130,7 +130,7 @@ fn typing_a_hex_replaces_accent_1() {
     h.get_by_label("Save").click();
     h.run_steps(2);
     assert!(h.state().dialog.is_none(), "status: {:?}", h.state().status);
-    assert_eq!(scheme(&h).name, "DeckCraft");
+    assert_eq!(scheme(&h).name, "Slides");
     assert_eq!(scheme(&h).get(SchemeSlot::Accent1).hex(), "11AA22");
     assert_eq!(undo_len(&h), n + 1);
 }

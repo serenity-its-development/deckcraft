@@ -4,6 +4,6 @@
     <comment>DeckCraft presentation</comment>
     <sub-class-of type="application/zip"/>
     <glob pattern="*.deckcraft"/>
-    <icon name="ai.storyteller.deckcraft"/>
+    <icon name="one.wkspace.slides"/>
   </mime-type>
 </mime-info>

@@ -9,15 +9,24 @@
 //! - File → Open and Insert → Pictures/Audio/Video use the browser file picker; bytes arrive
 //!   asynchronously through `Services::inbox`, applied to the document, slide and operation
 //!   that started the pick (a dismissed picker or a closed document drops the file);
-//! - Save and Export trigger a browser download;
+//! - Save and Export trigger a browser download (framed by OneOS, the host takes the file: a save is a new version of the
+//!   file it opened, an export a copy);
 //! - dropped files are read asynchronously by `web::WebShell` and delivered through the inbox;
 //! - preferences are not persisted.
+//!
+//! Framed by OneOS it talks to the ONE parent origin the frame page declared (`host`): the host sends the presentation to
+//! open and stores what Slides saves as a new version, the file is a live document (`collab`) when the host says so, and the
+//! assistant's allow-listed runs arrive as `craft:command`.
 //!
 //! URL query flags: `?webgl` forces the WebGL2 backend instead of WebGPU; `?blank` starts with an
 //! empty presentation instead of the sample deck; `?show` starts the slide show.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+#[cfg(target_arch = "wasm32")]
+mod collab;
+#[cfg(target_arch = "wasm32")]
+mod host;
 #[cfg(target_arch = "wasm32")]
 mod web;
 

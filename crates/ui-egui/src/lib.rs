@@ -15,6 +15,7 @@ pub mod dialogs;
 pub mod doc_window;
 pub mod eyedropper;
 pub mod fillui;
+pub mod host_commands;
 pub mod icons;
 pub mod media;
 pub mod menus;
@@ -55,6 +56,9 @@ pub type PickFn = Box<dyn FnMut(&str) -> Option<String>>;
 /// not applied to whichever document happens to be active.
 pub type OpenAsyncFn = Box<dyn FnMut(&str, u64)>;
 pub type DownloadFn = Box<dyn FnMut(&str, &[u8])>;
+/// OneOS host bridge: hand a saved file to the host, `(file name, bytes, save_as)`. An error means the page did not get it.
+/// `save_as` is a copy (a new file), never a new version of the file the host opened.
+pub type HostSaveFn = Box<dyn Fn(&str, &[u8], bool) -> Result<(), String>>;
 
 /// A file the host finished reading for the request `id` from [`SlideApp::begin_external_file`].
 #[derive(Clone, Debug)]
@@ -191,7 +195,7 @@ fn command_for(purpose: FilePurpose, name: &str, bytes: &[u8]) -> Result<&'stati
         FilePurpose::Open => open_command(name),
         FilePurpose::Infer => infer_command(name, bytes),
     };
-    cmd.ok_or_else(|| format!("{name}: DeckCraft can't open this kind of file"))
+    cmd.ok_or_else(|| format!("{name}: Slides can't open this kind of file"))
 }
 
 /// How long a transient status message stays visible.
@@ -220,6 +224,11 @@ pub struct Services {
     pub clipboard_set_html: Option<Box<dyn FnMut(&str, &str) -> bool>>,
     /// Audio output for media playback (cpal on desktop); without one media plays silently.
     pub audio_out: Option<Box<dyn deckcraft_media::AudioOut>>,
+    /// OneOS host bridge: where a save of the file the host opened goes (a new version of it); with this set the browser
+    /// download is never used for a save.
+    pub host_save: Option<HostSaveFn>,
+    /// OneOS host bridge: told when the unsaved state of the open presentations changes.
+    pub on_dirty: Option<Box<dyn Fn(bool)>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -397,7 +406,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
         Some("Cmd+P"),
         "{layout?, perPage?, slides?, includeHidden?, frame?, paper?: letter|a4|legal|a3, orientation?: portrait|landscape}",
     ),
-    ("app.about", "About DeckCraft", None, "{}"),
+    ("app.about", "About Slides", None, "{}"),
     ("app.palette", "Command Palette", Some("Cmd+Shift+P"), "{}"),
     ("app.preferences", "Preferences…", Some("Cmd+,"), "{}"),
     ("app.openDialog", "Open…", None, "{purpose?}"),
@@ -416,7 +425,6 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.qat", "Quick Access Toolbar", None, "{add: command id, params?, label?, icon?} | {remove: id, params?} | {reset: true} → [buttons]"),
     ("app.find", "Find…", Some("Cmd+F"), "{}"),
     ("app.replace", "Replace…", Some("Cmd+H"), "{}"),
-    ("app.links", "Community Links", None, "{}"),
 ];
 
 pub struct Perf {
@@ -526,6 +534,13 @@ pub struct SlideApp {
     next_file_id: u64,
     /// Picks and drops whose bytes have not arrived yet.
     pending_files: Vec<PendingFile>,
+    /// OneOS host bridge: the file name the host gave each open request, by request id (see [`SlideApp::begin_host_open`]).
+    host_opens: Vec<(u64, String)>,
+    /// OneOS host bridge: the presentation the host opened (its uid) and the file name it opened it as. A save of it is a new
+    /// version of that file.
+    pub host_doc: Option<(u64, String)>,
+    /// The unsaved state last told to [`Services::on_dirty`].
+    dirty_told: Option<bool>,
 }
 
 fn grid_options_touched(p: &Value) -> bool {
@@ -596,6 +611,9 @@ impl SlideApp {
             twisting: false,
             next_file_id: 1,
             pending_files: Vec::new(),
+            host_opens: Vec::new(),
+            host_doc: None,
+            dirty_told: None,
         }
     }
 
@@ -761,7 +779,7 @@ impl SlideApp {
             "deckcraft" => ("deckcraft", "deckcraft", false),
             "gif" => ("gif", "gif", false),
             other => {
-                self.set_status(format!("DeckCraft can't export “{other}”"));
+                self.set_status(format!("Slides can't export “{other}”"));
                 return false;
             }
         };
@@ -1068,10 +1086,6 @@ impl SlideApp {
                 let d = p.get("id").and_then(Value::as_str).ok_or("missing `id`")?;
                 self.dialog = Some(dialogs::Dialog::new(d));
             }
-            "app.links" => {
-                use deckcraft_engine::links::*;
-                return Ok(json!({"discord": DISCORD, "website": WEBSITE, "apps": APPS, "appPage": APP_PAGE, "github": GITHUB}));
-            }
             _ => return Err(format!("unknown UI command `{id}`")),
         }
         Ok(Value::Null)
@@ -1329,6 +1343,9 @@ impl SlideApp {
     }
 
     pub fn save_as_dialog(&mut self, format: &str) {
+        if self.host_save_active(true, if format == "pptx" { "pptx" } else { "deckcraft" }) {
+            return;
+        }
         let name = self.session.active().map(|d| d.title()).unwrap_or_else(|| "Presentation".into());
         let ext = if format == "pptx" { "pptx" } else { "deckcraft" };
         let suggested = format!("{name}.{ext}");
@@ -1368,6 +1385,9 @@ impl SlideApp {
     }
 
     pub fn save(&mut self) {
+        if self.host_save_active(false, "pptx") {
+            return;
+        }
         if self.session.active().and_then(|d| d.path.clone()).is_some() {
             match self.session.execute("file.save", &json!({})) {
                 Ok(_) => self.set_status("Saved"),
@@ -1502,12 +1522,70 @@ impl SlideApp {
         } else {
             self.execute_on_target(&req.target, name, cmd, &params)
         };
+        let host_name = self.host_opens.iter().position(|(i, _)| *i == id).map(|k| self.host_opens.remove(k).1);
         match result {
             Err(e) if cmd == "file.openBytes" => self.notify(e),
             Err(e) => self.set_status(e),
-            Ok(()) => {}
+            Ok(()) => {
+                if let (Some(name), Some(d)) = (host_name, self.session.active()) {
+                    self.host_doc = Some((d.uid, name));
+                }
+            }
         }
         self.drain_requests();
+    }
+
+    /// OneOS host bridge: the host opens `name` (a request like a drop). The returned id goes on the [`InboxEvent`]; once the
+    /// presentation is open, saving it hands a new version of `name` to [`Services::host_save`].
+    pub fn begin_host_open(&mut self, name: &str) -> u64 {
+        let id = self.begin_external_file("open");
+        self.host_opens.push((id, name.to_owned()));
+        id
+    }
+
+    /// OneOS host bridge: save the active presentation through the host. The presentation the host opened goes back as a new
+    /// version of that file in its own format; anything else is a copy (`.pptx`). `false` when there is no host to take it.
+    fn host_save_active(&mut self, as_copy: bool, copy_ext: &str) -> bool {
+        let Some(save) = self.services.host_save.as_ref() else { return false };
+        let Some(d) = self.session.active() else { return true };
+        let uid = d.uid;
+        let (name, copy) = match &self.host_doc {
+            Some((u, n)) if *u == uid && !as_copy => (n.clone(), false),
+            _ => (format!("{}.{copy_ext}", d.title()), true),
+        };
+        let ext = std::path::Path::new(&name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        let format = match ext.as_str() {
+            "potx" | "ppsx" => ext.as_str(),
+            "deckcraft" => "deckcraft",
+            _ => "pptx",
+        };
+        let bytes = match deckcraft_engine::cmd::file::save_bytes(&d.doc, format) {
+            Ok(b) => b,
+            Err(e) => {
+                self.set_status(e.to_string());
+                return true;
+            }
+        };
+        match save(&name, &bytes, copy) {
+            Ok(()) => {
+                if !copy && let Ok(st) = self.session.doc_mut() {
+                    st.saved_doc = st.doc.clone();
+                }
+                self.set_status(if copy { format!("Saved a copy as {name}") } else { "Saved".to_owned() });
+            }
+            Err(e) => self.set_status(e),
+        }
+        true
+    }
+
+    /// Tell the host when the unsaved state changes.
+    fn tell_dirty(&mut self) {
+        let Some(told) = self.services.on_dirty.as_ref() else { return };
+        let dirty = self.session.documents().iter().any(|d| d.is_dirty());
+        if self.dirty_told != Some(dirty) {
+            told(dirty);
+            self.dirty_told = Some(dirty);
+        }
     }
 
     /// Run `cmd` on the document and slide captured for the request, then put the view back
@@ -1612,6 +1690,7 @@ impl SlideApp {
         self.last_time = now;
         self.drain_control(ctx);
         self.poll_opening();
+        self.tell_dirty();
         if self.fonts_ready {
             self.drain_inbox();
         }

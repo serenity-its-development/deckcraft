@@ -19,7 +19,6 @@ pub mod icons;
 pub mod inkshape;
 pub mod io;
 pub mod keys;
-pub mod links;
 pub mod media_refs;
 pub mod recovery;
 pub mod sample;
@@ -493,6 +492,23 @@ pub struct Session {
     /// Presentations a host read off the UI thread, waiting for `file.adopt` (by token).
     loaded: Vec<(u64, cmd::file::LoadedFile)>,
     next_loaded: u64,
+    /// OneOS live editing: Undo and Redo are the SHARED deck's (they go to the host, which undoes this person's own last
+    /// change in the room), not this session's snapshots, which would also take back what others did.
+    /// `edit.undo` / `edit.redo` then queue a request (`true` = undo) in [`Self::collab_undo_requests`] for the host shell.
+    pub collab_undo: bool,
+    pub collab_undo_requests: Vec<bool>,
+    /// OneOS live editing: where the other people in the room are (the host shell keeps the list current each frame). Drawn as
+    /// an outline round the shapes they have selected, with their name; never part of the deck.
+    pub remote_cursors: Vec<RemoteCursor>,
+}
+
+/// Another person's place in a live deck: the slide they are on and the shapes they have selected there.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RemoteCursor {
+    pub name: String,
+    pub color: [u8; 3],
+    pub slide: SlideId,
+    pub shapes: Vec<ShapeId>,
 }
 
 impl Default for Session {
@@ -524,6 +540,9 @@ impl Session {
             panics_caught: 0,
             loaded: vec![],
             next_loaded: 0,
+            collab_undo: false,
+            collab_undo_requests: Vec::new(),
+            remote_cursors: Vec::new(),
         }
     }
     /// Hand over a presentation read on another thread ([`cmd::file::read_presentation_file`]);
@@ -667,6 +686,52 @@ impl Session {
             }
         }
         Ok(r)
+    }
+
+    /// How many undo steps the active presentation holds (the assistant's run folds the steps it made into one).
+    #[must_use]
+    pub fn undo_depth(&self) -> usize {
+        self.active().map_or(0, |d| d.history.undo.len())
+    }
+
+    /// Fold every undo step made since `depth` into ONE named `label` (it takes the deck back to before the first). `false`
+    /// when no step was made.
+    pub fn merge_undo(&mut self, depth: usize, label: &str) -> bool {
+        let Some(st) = self.active_mut() else { return false };
+        if st.history.undo.len() <= depth {
+            return false;
+        }
+        let mut first = st.history.undo[depth].clone();
+        st.history.undo.truncate(depth);
+        first.label = label.to_owned();
+        st.history.undo.push(first);
+        true
+    }
+
+    /// Put the active presentation back to before the undo steps made since `depth`, and forget them.
+    pub fn take_back_to(&mut self, depth: usize) {
+        let Some(st) = self.active_mut() else { return };
+        if st.history.undo.len() <= depth {
+            return;
+        }
+        let first = st.history.undo[depth].clone();
+        st.history.undo.truncate(depth);
+        st.doc = first.doc;
+        st.selection = first.selection;
+        st.interaction = None;
+        st.revision += 1;
+    }
+
+    /// OneOS live editing: change the active presentation with what other people did. The undo history and the saved state are
+    /// left alone (this is other people's work, already in the room); the selection is kept where it can be.
+    pub fn change_remote(&mut self, f: impl FnOnce(&mut Presentation)) -> Result<()> {
+        let st = self.doc_mut()?;
+        let mut doc = (*st.doc).clone();
+        f(&mut doc);
+        st.doc = Arc::new(doc);
+        st.revision += 1;
+        clamp_selection(st);
+        Ok(())
     }
 
     pub fn commands(&self) -> Vec<CommandInfo> {

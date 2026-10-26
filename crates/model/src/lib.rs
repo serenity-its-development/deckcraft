@@ -17,6 +17,7 @@ pub mod resolve;
 pub mod style;
 pub mod table;
 pub mod text;
+pub mod idcodec;
 pub mod theme;
 mod trendline;
 pub mod words;
@@ -51,11 +52,24 @@ macro_rules! id_type {
         }
     };
 }
+/// An id with a SHARED form for live editing (see [`idcodec`]): the same plain number as the others, except while a codec is
+/// installed.
+macro_rules! coded_id_type {
+    ($name:ident) => {
+        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(pub u32);
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+}
 id_type!(SlideId);
-id_type!(ShapeId);
+coded_id_type!(ShapeId);
 id_type!(LayoutId);
 id_type!(MasterId);
-id_type!(MediaId);
+coded_id_type!(MediaId);
 
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {

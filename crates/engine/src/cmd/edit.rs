@@ -61,9 +61,17 @@ fn restore(s: &mut Session, redo: bool) -> Result<Value> {
 }
 
 fn undo(s: &mut Session, _p: &Value) -> Result<Value> {
+    if s.collab_undo {
+        s.collab_undo_requests.push(true);
+        return ok();
+    }
     restore(s, false)
 }
 fn redo(s: &mut Session, _p: &Value) -> Result<Value> {
+    if s.collab_undo {
+        s.collab_undo_requests.push(false);
+        return ok();
+    }
     restore(s, true)
 }
 

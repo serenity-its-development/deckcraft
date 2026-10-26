@@ -13,7 +13,7 @@
   <key>CFBundleExecutable</key>
   <string>DeckCraft</string>
   <key>CFBundleIdentifier</key>
-  <string>ai.storyteller.deckcraft</string>
+  <string>one.wkspace.slides</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -63,7 +63,7 @@
       <string>DeckCraft</string>
       <key>LSItemContentTypes</key>
       <array>
-        <string>ai.storyteller.deckcraft.presentation</string>
+        <string>one.wkspace.slides.presentation</string>
       </array>
     </dict>
     <dict>
@@ -121,7 +121,7 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>ai.storyteller.deckcraft.presentation</string>
+      <string>one.wkspace.slides.presentation</string>
       <key>UTTypeDescription</key>
       <string>DeckCraft Presentation</string>
       <key>UTTypeConformsTo</key>

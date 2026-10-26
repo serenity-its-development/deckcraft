@@ -9,9 +9,9 @@
 # and load X11, Wayland, xkbcommon, Vulkan and ALSA at runtime; the freedesktop runtime has all
 # of them, and the GPU driver comes from its org.freedesktop.Platform.GL extension.
 #
-# ai.storyteller.deckcraft.yml (same directory) is the from-source manifest for Flathub. Keep
+# one.wkspace.slides.yml (same directory) is the from-source manifest for Flathub. Keep
 # runtime-version and finish-args identical in both (packaging-lint checks this).
-id: ai.storyteller.deckcraft
+id: one.wkspace.slides
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
@@ -32,7 +32,7 @@ finish-args:
   # granted so decks passed by path (the command line, Open Recent) work in the usual place.
   - --filesystem=xdg-documents
   # Deliberately not granted: network (the optional --control server listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network ai.storyteller.deckcraft` exposes it to
+  # the sandbox; `flatpak override --user --share=network one.wkspace.slides` exposes it to
   # host agents) and home/host filesystem access.
 modules:
   - name: deckcraft
@@ -40,11 +40,11 @@ modules:
     build-commands:
       - install -Dm755 bin/deckcraft /app/bin/deckcraft
       - install -Dm755 bin/deckcraft-cli /app/bin/deckcraft-cli
-      - install -Dm644 share/applications/ai.storyteller.deckcraft.desktop /app/share/applications/ai.storyteller.deckcraft.desktop
+      - install -Dm644 share/applications/one.wkspace.slides.desktop /app/share/applications/one.wkspace.slides.desktop
       # .deckcraft; the runtime's shared-mime-info already knows the PowerPoint types.
-      - install -Dm644 share/mime/packages/ai.storyteller.deckcraft.xml /app/share/mime/packages/ai.storyteller.deckcraft.xml
+      - install -Dm644 share/mime/packages/one.wkspace.slides.xml /app/share/mime/packages/one.wkspace.slides.xml
       # Already has the release's version and date substituted by package.sh.
-      - install -Dm644 share/metainfo/ai.storyteller.deckcraft.metainfo.xml /app/share/metainfo/ai.storyteller.deckcraft.metainfo.xml
+      - install -Dm644 share/metainfo/one.wkspace.slides.metainfo.xml /app/share/metainfo/one.wkspace.slides.metainfo.xml
       - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/deckcraft /app/share/doc/
     sources:
       - type: dir
