@@ -172,6 +172,7 @@ impl Shim {
                 self.comments_dirty.insert(k.slide.clone());
             }
         }
+        self.comment_seen.extend(now.keys().copied());
         self.comment_known = now;
     }
 
@@ -248,7 +249,8 @@ impl Shim {
             let theirs: BTreeSet<u32> = self.comment_known.keys().copied().collect();
             if let Some(local) = self.comment_ids.get(&sk) {
                 for (wc, (c, parent)) in local {
-                    if !theirs.contains(wc) && !self.comments.host_knows(*wc) {
+                    // Not named by the host yet (not: named once and gone since, which the host deleted).
+                    if !theirs.contains(wc) && !self.comment_seen.contains(wc) {
                         let p = parent.and_then(|p| local.get(p)).and_then(|(pw, _)| flat.iter().position(|(w, _)| w == pw));
                         flat.push((*wc, (c.clone(), p)));
                     }

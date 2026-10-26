@@ -285,6 +285,8 @@ pub struct Shim {
     comment_known: BTreeMap<u32, slide_comments::Known>,
     /// Slides whose comments the host's changed.
     comments_dirty: BTreeSet<String>,
+    /// Every comment number the host has ever named: one of this window's that is not in it is still on its way to the host.
+    comment_seen: BTreeSet<u32>,
 }
 
 /// The keys of the shapes and paragraphs a slide owns in the shared tree.
@@ -472,6 +474,7 @@ impl Shim {
             comment_ids: HashMap::new(),
             comment_known: BTreeMap::new(),
             comments_dirty: BTreeSet::new(),
+            comment_seen: BTreeSet::new(),
         }
     }
 
@@ -552,6 +555,7 @@ impl Shim {
         self.comment_ids.clear();
         self.comment_known.clear();
         self.comments_dirty.clear();
+        self.comment_seen.clear();
         self.sync_ids_in(deck);
         let mut ops = vec![
             json!({"op": "ensure", "path": [], "key": "slides", "kind": "list"}),

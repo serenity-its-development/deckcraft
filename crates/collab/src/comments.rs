@@ -152,8 +152,15 @@ impl CommentSync {
         let mut out = std::mem::take(&mut self.outbox);
         // Deleted here.
         let gone: Vec<u32> = self.known.keys().filter(|wc| !comments.contains_key(wc)).copied().collect();
+        let gone_set: std::collections::HashSet<u32> = gone.iter().copied().collect();
         for wc in gone {
+            let parent = self.known.get(&wc).and_then(|k| k.parent);
             self.known.remove(&wc);
+            // A reply that went because its thread was deleted is not deleted with it: the host lets only an author delete a
+            // comment, and a reply by someone else is theirs. It comes back from the host as a comment of its own.
+            if parent.is_some_and(|p| gone_set.contains(&p)) {
+                continue;
+            }
             match self.host_of.get(&wc) {
                 Some(id) => out.push(CommentMsg::Delete { id: id.clone() }),
                 None => {

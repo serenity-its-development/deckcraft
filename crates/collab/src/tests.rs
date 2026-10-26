@@ -171,3 +171,41 @@ fn pictures_travel_as_content_addresses_and_wait_as_placeholders() {
     assert!(b.take_shown().wanted.is_empty());
     assert!(b.local(&db, 2_000).expect("local").is_empty());
 }
+
+#[test]
+fn line_breaks_and_fields_are_inline_objects_that_travel_with_their_character() {
+    use deckcraft_model::text::RunKind;
+    let mut da = deck();
+    let mut s = (*da.slides[0]).clone();
+    if let Some(t) = s.shapes[1].text.as_mut() {
+        t.paragraphs[0].runs = vec![
+            Run::new("page "),
+            Run { text: "3".into(), props: RunProps { bold: Some(true), ..Default::default() }, kind: RunKind::Field { field: "slidenum".into() } },
+            Run::new(" of x"),
+            Run { text: String::new(), props: RunProps::default(), kind: RunKind::Break },
+            Run::new("next line"),
+        ];
+    }
+    da.slides[0] = Arc::new(s);
+    let mut a = Shim::new(11);
+    let (mut b, db) = joined(&mut a, &da);
+    let p = &db.slides[0].shapes[1].text.as_ref().expect("text").paragraphs[0];
+    assert_eq!(p.runs.len(), 5, "{p:?}");
+    assert!(matches!(&p.runs[1].kind, RunKind::Field { field } if field == "slidenum") && p.runs[1].text == "3");
+    assert!(matches!(p.runs[3].kind, RunKind::Break));
+    assert_eq!(p.runs[4].text, "next line");
+    assert!(b.local(&db, 2_000).expect("local").is_empty());
+    assert_eq!(a.digest(&da).expect("digest"), b.digest(&db).expect("digest"));
+}
+
+#[test]
+fn numbers_in_float_or_integer_spelling_are_one_value() {
+    let mut da = deck();
+    let mut s = (*da.slides[0]).clone();
+    s.shapes[0].xfrm = Some(deckcraft_model::Xfrm { x: 20.0, y: 30.5, w: 400.0, h: 80.0, ..Default::default() });
+    da.slides[0] = Arc::new(s);
+    let mut a = Shim::new(11);
+    let (mut b, db) = joined(&mut a, &da);
+    assert_eq!(db.slides[0].shapes[0].xfrm, da.slides[0].shapes[0].xfrm);
+    assert!(b.local(&db, 2_000).expect("local").is_empty(), "20 and 20.0 are one value");
+}

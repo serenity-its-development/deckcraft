@@ -234,6 +234,7 @@ mod tests {
     fn a_run_is_judged_whole_first_and_is_one_undo_step() {
         let mut app = app();
         let before = app.session.undo_depth();
+        let slides = app.session.active().expect("doc").doc.slides.len();
         let refused = app.run_command_batch(&json!({"label": "x", "steps": [{"name": "slide.duplicate"}, {"name": "file.save"}]}));
         assert!(refused.expect_err("outside the list").starts_with("command-not-allowed"));
         assert_eq!(app.session.undo_depth(), before, "nothing ran");
@@ -245,7 +246,7 @@ mod tests {
         assert_eq!(app.session.active().expect("doc").history.undo.last().expect("step").label, "Duplicate and rename");
         // One Undo takes the whole run back.
         app.run("edit.undo", json!({})).expect("undo");
-        assert_eq!(app.session.active().expect("doc").doc.slides.len(), 1);
+        assert_eq!(app.session.active().expect("doc").doc.slides.len(), slides);
     }
 
     #[test]
