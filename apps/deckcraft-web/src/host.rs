@@ -22,6 +22,9 @@
 //!   host to land a version soon after this window inserted a picture.
 //! - `craft:command {session, id, method, params}` (from the parent) is the assistant's run (`command.batch`): the shell runs
 //!   it through the app and answers `craft:result {session, id, ok, result | error}`.
+//! - `craft:opened {session}` (to the parent): the document is loaded and drawn; the editor takes input. `craft:view {session, scrollTop,
+//!   scrollHeight, clientHeight, selection ...}` (from the parent, kept by the loader on `globalThis.__craftFirstView`): where the host's
+//!   read-only first view was left; the editor opens there and answers `craft:viewed {session}` once that is drawn ([`crate::handoff`]).
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -140,6 +143,18 @@ impl Bridge {
 
     pub fn take_events(&self) -> Vec<Event> {
         self.shared.borrow_mut().events.drain(..).collect()
+    }
+
+    /// `craft:opened {session}`: the document is loaded and drawn, the editor takes input (handoff.rs).
+    pub fn post_opened(&self) {
+        let session = self.shared.borrow().opened.session.clone();
+        self.send(&[("type", "craft:opened".into()), ("session", session.as_str().into())]);
+    }
+
+    /// `craft:viewed {session}`: the first view's place is applied and drawn; the host may let the first view go.
+    pub fn post_viewed(&self) {
+        let session = self.shared.borrow().opened.session.clone();
+        self.send(&[("type", "craft:viewed".into()), ("session", session.as_str().into())]);
     }
 
     pub fn post_ready(&self) {
@@ -261,7 +276,10 @@ impl Bridge {
                     let mut s = bridge.shared.borrow_mut();
                     s.opened = opened.clone();
                     s.events.push_back(Event::Opened(opened, bytes));
+                    crate::handoff::wasm::note_open();
                 }
+                // The loader keeps the place on `__craftFirstView`; the app reads it (handoff.rs) - this wakes it.
+                "craft:view" => {}
                 "craft:saved" if string(&data, "session").as_deref() == Some(known.as_str()) => {
                     let mut shared = bridge.shared.borrow_mut();
                     shared.saved += 1;
@@ -312,6 +330,21 @@ impl Bridge {
     /// Post a message to the parent; false if it couldn't be sent.
     fn send(&self, fields: &[(&str, JsValue)]) -> bool {
         message(fields).is_some_and(|m| self.parent.post_message(&m, &self.origin).is_ok())
+    }
+}
+
+impl crate::handoff::Link for Bridge {
+    fn open_seq(&self) -> u64 {
+        crate::handoff::wasm::opens()
+    }
+    fn take_view(&self) -> Option<crate::handoff::FirstView> {
+        crate::handoff::wasm::take_view(&self.shared.borrow().opened.session)
+    }
+    fn post_opened(&self) {
+        Bridge::post_opened(self);
+    }
+    fn post_viewed(&self) {
+        Bridge::post_viewed(self);
     }
 }
 
