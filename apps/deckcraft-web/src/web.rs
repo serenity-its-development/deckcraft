@@ -68,7 +68,8 @@ pub fn start() {
                     if let Some(b) = &bridge {
                         b.post_ready();
                     }
-                    Ok(Box::new(WebShell { app, inbox, bridge, collab }))
+                    let handoff = bridge.clone().map(|bridge| (bridge, crate::handoff::Handoff::new()));
+                    Ok(Box::new(WebShell { app, inbox, bridge, collab, handoff }))
                 }),
             )
             .await;
@@ -99,6 +100,8 @@ struct WebShell {
     bridge: Option<crate::host::Bridge>,
     /// Live editing through the host (`collab`), when framed by it.
     collab: Option<crate::collab::Collab>,
+    /// The progressive open's hand-over to the host (`craft:opened`, the first view's place, `craft:viewed`), when framed by it.
+    handoff: Option<(crate::host::Bridge, crate::handoff::Handoff<Option<u64>>)>,
 }
 
 impl eframe::App for WebShell {
@@ -126,12 +129,24 @@ impl eframe::App for WebShell {
             });
         }
         self.host_events(ctx);
+        if let Some((bridge, handoff)) = self.handoff.as_mut() {
+            handoff.before(bridge, self.app.host_doc.as_ref().map(|(uid, _)| *uid));
+        }
         if let Some(collab) = self.collab.as_mut() {
             collab.pre(&mut self.app);
         }
         self.app.logic(ctx);
         if let Some(collab) = self.collab.as_mut() {
             collab.post(&mut self.app);
+        }
+        if let Some((bridge, handoff)) = self.handoff.as_mut() {
+            let app = &mut self.app;
+            let doc = app.host_doc.as_ref().map(|(uid, _)| *uid);
+            if handoff.after(bridge, doc, |view| {
+                app.open_at_first_view(&view.selection, view.y_fraction());
+            }) {
+                ctx.request_repaint();
+            }
         }
     }
 

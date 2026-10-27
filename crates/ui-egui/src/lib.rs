@@ -1535,6 +1535,12 @@ impl SlideApp {
         self.drain_requests();
     }
 
+    /// Open at where the host's read-only first view was left (OneOS progressive open): the slide at that fraction of the deck is the
+    /// current one, and the object holding the selected text is selected on it. Not an edit. False when there is no deck.
+    pub fn open_at_first_view(&mut self, selection: &str, y_fraction: f64) -> bool {
+        deckcraft_engine::first_view::open_at_first_view(&mut self.session, selection, y_fraction).unwrap_or(false)
+    }
+
     /// OneOS host bridge: the host opens `name` (a request like a drop). The returned id goes on the [`InboxEvent`]; once the
     /// presentation is open, saving it hands a new version of `name` to [`Services::host_save`].
     pub fn begin_host_open(&mut self, name: &str) -> u64 {
@@ -2192,6 +2198,8 @@ mod animpane_tests;
 mod browsetheme_tests;
 #[cfg(test)]
 mod compare_tests;
+#[cfg(test)]
+mod first_view_tests;
 #[cfg(test)]
 mod eyedropper_tests;
 #[cfg(test)]
