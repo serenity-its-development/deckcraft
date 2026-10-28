@@ -101,6 +101,293 @@ pub const ARGUMENT_COMMANDS: &[&str] = &[
     "inspect",
 ];
 
+/// Every command the app has and the assistant may NOT run, with the reason: together with `ASSISTANT_COMMANDS` and `ARGUMENT_COMMANDS` this is the whole command
+/// catalog (a test holds the three to it, so a command can neither be forgotten nor listed twice).
+pub const LEFT_OUT: &[(&str, &[&str])] = &[
+    (
+        "Files and addresses move only through the host: open, save, export, print, close, recover and the like are the host's, never a command id the assistant runs; so are the commands that read a file, a picture, a sound, a video, a font or a web address.",
+        &[
+            "file.new",
+            "file.templates",
+            "file.open",
+            "file.adopt",
+            "file.openBytes",
+            "file.save",
+            "file.saveAs",
+            "file.saveTemplate",
+            "file.saveBytes",
+            "file.export",
+            "file.info",
+            "file.render",
+            "file.close",
+            "file.properties",
+            "file.recovery.save",
+            "file.recovery.list",
+            "file.recovery.open",
+            "file.recovery.discard",
+            "file.revert",
+            "slide.fromOutline",
+            "slide.reuseList",
+            "slide.reuse",
+            "insert.icon",
+            "insert.icons",
+            "insert.picture",
+            "insert.photoAlbum",
+            "insert.photoAlbumEdit",
+            "insert.audio",
+            "insert.video",
+            "insert.hyperlink",
+            "picture.change",
+            "font.add",
+            "media.posterFrame",
+        ],
+    ),
+    ("Undo, redo and the history belong to the person: a run is one undo step, and undoing it is theirs.", &["edit.undo", "edit.redo"]),
+    (
+        "The system clipboard is the person's (copy, cut and paste read or write what they hold outside the app), and so are the format painters.",
+        &[
+            "edit.cut",
+            "edit.copy",
+            "edit.paste",
+            "edit.pasteSpecial",
+            "edit.pasteText",
+            "format.painter",
+            "format.painterApply",
+            "animation.painter",
+            "animation.painterApply",
+        ],
+    ),
+    (
+        "The window, the slide show, the preferences, the add-ins and the help are the person's, not the document's: new windows, running a show, updates and about, the command list.",
+        &[
+            "window.next",
+            "font.rescan",
+            "view.slideMaster",
+            "view.handoutMaster",
+            "view.notesMaster",
+            "view.closeMaster",
+            "show.fromStart",
+            "show.fromCurrent",
+            "show.setup",
+            "show.customShow",
+            "commands.list",
+        ],
+    ),
+    (
+        "Interactive: it begins a pointer gesture or an editing session (editing a path's points, drawing, selecting text in place), which only a person's pointer or keyboard can finish.",
+        &[
+            "shape.freeform",
+            "draw.inkToShape",
+            "shape.editPoints",
+            "shape.points",
+            "shape.movePoint",
+            "shape.addPoint",
+            "shape.pointType",
+            "shape.moveHandle",
+            "shape.deletePoint",
+            "shape.deleteSegment",
+            "shape.segmentType",
+            "shape.openPath",
+            "shape.closePath",
+            "text.edit",
+            "text.exit",
+            "text.compose",
+            "text.commit",
+            "text.move",
+            "text.select",
+            "text.selectAll",
+            "text.selectWord",
+            "text.selectParagraph",
+            "format.fontDialog",
+            "format.paragraphDialog",
+            "table.drawLine",
+            "table.eraseLine",
+            "table.selectCells",
+        ],
+    ),
+    (
+        "Takes arguments whose shape has not yet been checked against a run (a shape, a range, a name, a setting), so the assistant does not run it yet; every command that acts at once on the selection is in the list.",
+        &[
+            "slide.colorAt",
+            "slide.next",
+            "slide.previous",
+            "slide.first",
+            "slide.last",
+            "slide.selectSlides",
+            "slide.notes",
+            "section.remove",
+            "shape.insert",
+            "shape.presets",
+            "insert.table",
+            "insert.chart",
+            "insert.wordArt",
+            "insert.slideNumber",
+            "insert.dateTime",
+            "insert.symbol",
+            "shape.action",
+            "chart.type",
+            "chart.data",
+            "chart.options",
+            "insert.smartArt",
+            "insert.actionButton",
+            "smartArt.nodes",
+            "smartArt.setNodes",
+            "smartArt.addNode",
+            "smartArt.removeNode",
+            "smartArt.promote",
+            "smartArt.demote",
+            "smartArt.layout",
+            "smartArt.fromText",
+            "smartArt.toText",
+            "smartArt.toShapes",
+            "smartArt.picture",
+            "smartArt.style",
+            "smartArt.colors",
+            "shape.connect",
+            "shape.sites",
+            "shape.move",
+            "shape.rotate",
+            "shape.sizePosition",
+            "shape.flip",
+            "shape.adjust",
+            "shape.change",
+            "shape.smoothCorners",
+            "shape.fill",
+            "shape.line",
+            "shape.effects",
+            "shape.quickStyle",
+            "shape.lock",
+            "shape.setDefault",
+            "picture.crop",
+            "picture.adjust",
+            "picture.reset",
+            "media.options",
+            "picture.removeBackground",
+            "picture.style",
+            "picture.styles",
+            "picture.recolor",
+            "picture.recolors",
+            "picture.transparentColor",
+            "guide.add",
+            "guide.move",
+            "guide.delete",
+            "guide.list",
+            "arrange.reorder",
+            "arrange.regroup",
+            "arrange.align",
+            "arrange.distribute",
+            "selection.select",
+            "selection.showAll",
+            "selection.hideAll",
+            "shape.merge",
+            "font.used",
+            "font.replace",
+            "text.autocorrect",
+            "text.delete",
+            "text.set",
+            "text.get",
+            "format.underline",
+            "format.strikethrough",
+            "format.superscript",
+            "format.subscript",
+            "format.grow",
+            "format.shrink",
+            "format.textTransparency",
+            "format.language",
+            "format.highlight",
+            "format.case",
+            "format.caps",
+            "format.spacing",
+            "format.textShadow",
+            "format.textOutline",
+            "format.textWarp",
+            "format.align",
+            "format.rtl",
+            "format.bullets",
+            "format.numbering",
+            "format.lineSpacing",
+            "format.paragraph",
+            "format.ruler",
+            "format.tabs",
+            "format.direction",
+            "format.columns",
+            "format.autofit",
+            "format.wrap",
+            "format.margins",
+            "format.state",
+            "design.browseTheme",
+            "design.themes",
+            "design.colors",
+            "design.variants",
+            "design.fonts",
+            "design.background",
+            "design.slideSize",
+            "design.headerFooter",
+            "handout.placeholders",
+            "notes.placeholders",
+            "master.insertLayout",
+            "master.renameLayout",
+            "master.deleteLayout",
+            "master.insertPlaceholder",
+            "master.preserve",
+            "master.placeholders",
+            "design.ideas",
+            "design.applyIdea",
+            "transition.set",
+            "transition.timing",
+            "transition.sound",
+            "transition.list",
+            "animation.set",
+            "animation.add",
+            "animation.remove",
+            "animation.move",
+            "animation.timing",
+            "animation.options",
+            "animation.clear",
+            "animation.list",
+            "animation.get",
+            "table.split",
+            "table.style",
+            "table.options",
+            "table.cellFill",
+            "table.borders",
+            "table.cellMargins",
+            "table.cellAlign",
+            "table.columnWidth",
+            "text.find",
+            "text.replace",
+            "comment.list",
+            "comment.next",
+            "comment.prev",
+            "review.accessibility",
+            "review.spelling",
+            "review.spellingChange",
+            "review.addToDictionary",
+            "review.dictionary",
+            "review.thesaurus",
+            "review.replaceWord",
+            "review.compare",
+            "review.revisions",
+            "review.accept",
+            "review.reject",
+            "review.endCompare",
+            "document.inspect",
+            "slide.inspect",
+            "shape.inspect",
+            "media.play",
+            "media.pause",
+            "media.toggle",
+            "media.stop",
+            "media.seek",
+            "media.info",
+            "media.gifPlay",
+            "picture.artisticEffect",
+            "insert.zoom",
+            "picture.compress",
+        ],
+    ),
+];
+
 /// Every command id a run may name, in the order the host's registry declares them.
 pub fn allowed() -> Vec<&'static str> {
     ASSISTANT_COMMANDS.iter().chain(ARGUMENT_COMMANDS).copied().collect()
@@ -226,7 +513,15 @@ mod tests {
             assert!(!allowed().contains(&bad), "{bad} must not be allowed");
         }
         for id in allowed() {
-            assert!(!id.contains("file") && !id.contains("path") && !id.contains("open") && !id.contains("save") && !id.contains("export") && !id.contains("import"), "{id}");
+            assert!(
+                !id.contains("file")
+                    && !id.contains("path")
+                    && !id.contains("open")
+                    && !id.contains("save")
+                    && !id.contains("export")
+                    && !id.contains("import"),
+                "{id}"
+            );
         }
     }
 
@@ -253,7 +548,8 @@ mod tests {
     fn a_failing_step_takes_back_the_steps_before_it() {
         let mut app = app();
         let slides = app.session.active().expect("doc").doc.slides.len();
-        let e = app.run_command_batch(&json!({"steps": [{"name": "slide.duplicate"}, {"name": "slide.go", "args": {"index": 99}}]})).expect_err("fails");
+        let e =
+            app.run_command_batch(&json!({"steps": [{"name": "slide.duplicate"}, {"name": "slide.go", "args": {"index": 99}}]})).expect_err("fails");
         assert!(e.starts_with("step-failed"), "{e}");
         assert_eq!(app.session.active().expect("doc").doc.slides.len(), slides);
     }
@@ -266,7 +562,31 @@ mod tests {
         assert!(!shapes.is_empty());
         let name = shapes[0]["name"].as_str().expect("name").to_owned();
         app.run_command_batch(&json!({"steps": [{"name": "select.shapes", "args": {"names": [name]}}, {"name": "format.bold"}]})).expect("bold");
-        let e = app.run_command_batch(&json!({"steps": [{"name": "select.shapes", "args": {"names": ["No such shape"]}}]})).expect_err("unknown name");
+        let e =
+            app.run_command_batch(&json!({"steps": [{"name": "select.shapes", "args": {"names": ["No such shape"]}}]})).expect_err("unknown name");
         assert!(e.contains("no shape named"), "{e}");
+    }
+
+    #[test]
+    fn the_allow_list_and_the_commands_left_out_are_the_whole_catalog_with_nothing_twice() {
+        let all: Vec<String> = deckcraft_engine::Session::new().commands().iter().map(|c| c.id.to_string()).collect();
+        let mut seen = std::collections::HashSet::new();
+        for id in ASSISTANT_COMMANDS {
+            assert!(all.iter().any(|c| c == id), "{id} is not a command of the app");
+            assert!(seen.insert(id.to_string()), "{id} is listed twice");
+        }
+        // The window's own commands stand beside the registry's: they are not in it.
+        for id in ARGUMENT_COMMANDS {
+            assert!(seen.insert(id.to_string()), "{id} is listed twice");
+        }
+        for (reason, ids) in LEFT_OUT {
+            assert!(reason.len() > 20, "a reason: {reason}");
+            for id in *ids {
+                assert!(all.iter().any(|c| c == id), "{id} is left out but is not a command of the app");
+                assert!(seen.insert(id.to_string()), "{id} is both allowed and left out, or left out twice");
+            }
+        }
+        let missing: Vec<&String> = all.iter().filter(|c| !seen.contains(c.as_str())).collect();
+        assert!(missing.is_empty(), "commands neither allowed nor left out (with a reason): {missing:?}");
     }
 }
