@@ -5,3 +5,19 @@ CRAFT_FONTS_DIR = { value = "../craft-fonts", relative = true }
 
 [alias]
 xtask = "run --package xtask --"
+
+# OneOS: every storytold git source is read from our fork (the pinned revisions are present there), so a plain --locked build never reaches a third party.
+[source.storytold-1]
+git = "https://github.com/storytold/craft-libs"
+rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef"
+replace-with = "oneos-1"
+[source.oneos-1]
+git = "https://github.com/serenity-its-development/craft-libs"
+rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef"
+[source.storytold-2]
+git = "https://github.com/storytold/craft-libs"
+rev = "f0ad6c1e1d297908915f4be315b0fcfc9be7b5d4"
+replace-with = "oneos-2"
+[source.oneos-2]
+git = "https://github.com/serenity-its-development/craft-libs"
+rev = "f0ad6c1e1d297908915f4be315b0fcfc9be7b5d4"
