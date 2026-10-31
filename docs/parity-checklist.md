@@ -9,12 +9,12 @@ The summary between `<!-- SUMMARY -->
 |---|---|---|---|---|---|
 | P0 | 72 | 61 | 11 | 0 | 92% |
 | P1 | 65 | 45 | 16 | 4 | 82% |
-| P2 | 54 | 18 | 25 | 11 | 56% |
+| P2 | 54 | 19 | 24 | 11 | 57% |
 
 | Area | Parity |
 |---|---|
 | Application shell | 81% |
-| Files | 78% |
+| Files | 79% |
 | Slides | 92% |
 | Views | 98% |
 | Masters & themes | 92% |
@@ -70,7 +70,7 @@ Open P0 items: Contextual tabs (Shape Format, Picture Format, Table Design/Layou
 | Files | Password protection | P2 | M |
 | Files | Reuse slides from another file | P1 | P |
 | Files | Drag and drop files onto the window | P1 | D |
-| Files | OpenDocument .odp open/save | P2 | P |
+| Files | OpenDocument .odp open/save | P2 | D |
 | Slides | New slide by layout | P0 | D |
 | Slides | Duplicate, delete, hide slides | P0 | D |
 | Slides | Reorder slides (thumbnails, sorter) | P0 | D |

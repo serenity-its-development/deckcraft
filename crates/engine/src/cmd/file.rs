@@ -384,6 +384,7 @@ fn report_damage(s: &mut Session, damaged: &Damage) -> Result<()> {
 pub fn save_bytes(doc: &Presentation, format: &str) -> Result<Vec<u8>> {
     match format {
         f @ ("pptx" | "potx" | "ppsx") => deckcraft_pptx::export_as(doc, f).map_err(|e| EngineError::Other(e.to_string())),
+        "odp" => deckcraft_pptx::odp::export(doc).map_err(|e| EngineError::Other(e.to_string())),
         "outline" | "txt" => Ok(deckcraft_format::slides_to_outline(doc).into_bytes()),
         "rtf" => Ok(deckcraft_format::rtf::slides_to_rtf(doc).into_bytes()),
         "pdf" => deckcraft_pdf::export(doc, &Default::default()).map_err(|e| EngineError::Other(e.to_string())),
@@ -461,10 +462,10 @@ pub fn pdf_bytes(doc: &Presentation, p: &Value) -> Result<Vec<u8>> {
 }
 
 /// The output extensions [`format_for_path`] maps to a writer of that format.
-pub const WRITABLE_EXTENSIONS: &[&str] = &["deckcraft", "pptx", "potx", "ppsx", "pdf", "png", "jpg", "jpeg", "gif", "txt", "md", "rtf"];
+pub const WRITABLE_EXTENSIONS: &[&str] = &["deckcraft", "pptx", "potx", "ppsx", "odp", "pdf", "png", "jpg", "jpeg", "gif", "txt", "md", "rtf"];
 
 /// The format a file named `path` is written in, or `None` when its extension names no format
-/// DeckCraft writes (`.odp`, `.svg`, no extension …): [`format_for_path`] would save
+/// DeckCraft writes (`.svg`, `.bmp`, no extension …): [`format_for_path`] would save
 /// those as native `.deckcraft` bytes under the wrong name.
 pub fn writable_format_for_path(path: &str) -> Option<&'static str> {
     let ext = std::path::Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
@@ -484,6 +485,8 @@ pub fn format_for_path(path: &str) -> &'static str {
         "potx"
     } else if l.ends_with(".ppsx") {
         "ppsx"
+    } else if l.ends_with(".odp") {
+        "odp"
     } else if l.ends_with(".png") {
         "png"
     } else if l.ends_with(".jpg") || l.ends_with(".jpeg") {

@@ -37,6 +37,8 @@ const MAX_PAGES: usize = 10_000;
 /// Table cells read per table.
 const MAX_CELLS: usize = 100_000;
 
+pub use crate::odp_write::export;
+
 /// Is this an ODF presentation package (`mimetype` says `…opendocument.presentation[-template]`)?
 pub fn sniff(bytes: &[u8]) -> bool {
     if !bytes.starts_with(b"PK") {
@@ -304,7 +306,8 @@ impl Imp<'_, '_> {
         {
             slide.name = n.to_string();
         }
-        slide.hidden = matches!(page.attr("presentation:visibility"), Some("hidden"));
+        slide.hidden = matches!(page.attr("presentation:visibility"), Some("hidden"))
+            || self.st.prop(page.attr("draw:style-name"), "drawing-page-properties", "presentation:visibility", false) == Some("hidden");
         slide.background = self.page_background(page);
         let mut used_ph: Vec<(PhType, u32)> = vec![];
         let mut out = vec![];

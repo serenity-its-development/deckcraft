@@ -127,12 +127,12 @@ Detail in [file-format-parity.md](file-format-parity.md).
 - **Estimate:** 20–35 h (import only, from the public [MS-PPT] spec). Owner decision whether it's
   worth it.
 
-### OpenDocument `.odp` opens but doesn't save
-- **Evidence:** PowerPoint opens and saves `.odp`. DeckCraft reads the common subset
-  (`crates/pptx/src/odp.rs`) and converts it to `.pptx`, PDF and images; it can't write `.odp`, and
-  ODP animations, transitions, charts and OLE objects are not read.
+### OpenDocument `.odp`: animations, transitions and charts
+- **Evidence:** PowerPoint opens and saves `.odp` with animations and charts. DeckCraft reads and
+  writes the common subset (`crates/pptx/src/odp.rs`, `odp_write.rs`); animations, transitions,
+  charts, media and comments are neither read nor written.
 - **Impact:** LibreOffice users and public-sector exchange.
-- **Estimate:** 8–14 h (write the common subset; read animations and charts).
+- **Estimate:** 6–10 h.
 
 ### PDF export rasterizes slide artwork
 - **Evidence:** `crates/pdf` places each slide as an image under a selectable text layer, links and

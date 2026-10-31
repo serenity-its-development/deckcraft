@@ -21,7 +21,7 @@ fn convert_rejects_output_formats_it_cannot_write() {
     let out = Command::new(env!("CARGO_BIN_EXE_deckcraft-cli")).args(["run", "--sample", "--export"]).arg(&input).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
 
-    for name in ["out.odp", "out.bmp", "out.svg", "out.outline", "out"] {
+    for name in ["out.svg2", "out.bmp", "out.svg", "out.outline", "out"] {
         let target = dir.join(name);
         let out = cli(&[Path::new("convert"), &input, &target]);
         assert!(!out.status.success(), "{name}: convert should fail");
@@ -47,10 +47,10 @@ fn convert_rejects_output_formats_it_cannot_write() {
 fn run_rejects_unsupported_save_and_export_paths_before_running() {
     let dir = temp_dir("run-unsupported");
     for flag in ["--save", "--export"] {
-        let target = dir.join("deck.odp");
+        let target = dir.join("deck.svg");
         let out = Command::new(env!("CARGO_BIN_EXE_deckcraft-cli")).args(["run", "--sample", flag]).arg(&target).output().unwrap();
         assert!(!out.status.success(), "{flag}: run should fail");
-        assert!(String::from_utf8_lossy(&out.stderr).contains("unsupported output format .odp"), "{flag}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("unsupported output format .svg"), "{flag}");
         assert!(!target.exists(), "{flag}: nothing is written");
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -106,6 +106,24 @@ fn odp_opens_and_converts_to_pdf_pptx_and_outline() {
     let text = std::fs::read_to_string(&md).unwrap();
     for word in ["Harbour plan", "Second edition", "Moorings", "Pontoons"] {
         assert!(text.contains(word), "{word} is in the pptx made from the odp: {text}");
+    }
+
+    // And saved as .odp again, after an edit, it reads back with the edit.
+    let saved = dir.join("saved.odp");
+    let out = Command::new(env!("CARGO_BIN_EXE_deckcraft-cli"))
+        .args(["run", "--in"])
+        .arg(&input)
+        .args(["--cmd", r#"slide.new={"title":"CORPUSEDIT"}"#, "--save"])
+        .arg(&saved)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let md = dir.join("saved.md");
+    let out = cli(&[Path::new("convert"), &saved, &md]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let text = std::fs::read_to_string(&md).unwrap();
+    for word in ["Harbour plan", "Moorings", "Pontoons", "Buoy", "CORPUSEDIT"] {
+        assert!(text.contains(word), "{word} is in the saved odp: {text}");
     }
 
     let png = dir.join("deck.png");

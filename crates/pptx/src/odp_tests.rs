@@ -226,3 +226,44 @@ fn not_a_presentation_is_refused_by_name() {
     let e = import(&buf.into_inner()).unwrap_err().to_string();
     assert!(e.contains("content.xml"), "{e}");
 }
+
+/// `.odp` save: what the reader read comes back from what the writer wrote.
+#[test]
+fn saved_odp_reads_back() {
+    let p = deck();
+    let bytes = export(&p).expect("odp writes");
+    assert!(sniff(&bytes));
+    assert_eq!(&bytes[30..38], b"mimetype", "the mimetype comes first");
+    let q = import(&bytes).expect("the saved odp reads");
+    assert_eq!(q.slides.len(), 2);
+    assert!((q.slide_size.width - p.slide_size.width).abs() < 0.01 && (q.slide_size.height - p.slide_size.height).abs() < 0.01);
+    assert_eq!(q.props.title, "Quarterly review");
+    let (a, b) = (&p.slides[0], &q.slides[0]);
+    assert_eq!(b.name, "Agenda");
+    assert_eq!(b.title(), "Quarterly results");
+    assert_eq!(b.notes_text(), "Speak slowly");
+    assert!(q.slides[1].hidden);
+    assert!(matches!(&b.background, Some(Background::Fill { fill: Fill::Solid { .. } })));
+    assert!(matches!(&q.slides[1].background, Some(Background::Fill { fill: Fill::Gradient(_) })), "{:?}", q.slides[1].background);
+    // Every shape with text keeps it.
+    let texts = |s: &Slide| {
+        let mut v: Vec<String> = s.shapes.iter().filter_map(|x| x.text.as_ref()).map(|t| t.text()).filter(|t| !t.is_empty()).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(texts(a), texts(b));
+    let body = b.shapes.iter().find(|x| matches!(x.ph_type(), Some(PhType::Body | PhType::Obj))).unwrap();
+    assert_eq!(body.text.as_ref().unwrap().paragraphs.iter().map(|p| p.level).collect::<Vec<_>>(), [0, 1, 0], "list levels");
+    // Geometry: presets, the picture, the table, the turned frame.
+    assert_eq!(by_name(b, "Oval").geom.preset_name(), Some("ellipse"));
+    assert!(b.shapes.iter().any(|x| x.geom.preset_name() == Some("chevron")));
+    assert!(matches!(&by_name(b, "Pic").kind, ShapeKind::Picture { .. }));
+    let ShapeKind::Table(t) = &by_name(b, "Table 1").kind else { panic!("table") };
+    assert_eq!((t.cols.len(), t.rows.len(), t.rows[0].cells[0].grid_span), (2, 2, 2));
+    assert!(matches!(t.rows[0].cells[0].fill, Some(Fill::Solid { .. })));
+    let (ta, tb) = (by_name(a, "Turned").xfrm.unwrap(), by_name(b, "Turned").xfrm.unwrap());
+    assert!((ta.rot - tb.rot).abs() < 1e-6 && (ta.x - tb.x).abs() < 0.01 && (ta.y - tb.y).abs() < 0.01, "{ta:?} vs {tb:?}");
+    let (oa, ob) = (by_name(a, "Oval").xfrm.unwrap(), by_name(b, "Oval").xfrm.unwrap());
+    assert!((oa.x - ob.x).abs() < 0.01 && (oa.w - ob.w).abs() < 0.01);
+    assert_eq!(q.media.len(), 1);
+}
