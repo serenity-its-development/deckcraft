@@ -982,7 +982,9 @@ name = "deckcraft-collab-node"
 version = "0.10.0"
 dependencies = [
  "deckcraft-collab",
+ "deckcraft-engine",
  "deckcraft-model",
+ "deckcraft-ui-egui",
  "serde",
  "serde_json",
  "wasm-bindgen",

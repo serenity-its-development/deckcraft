@@ -16,8 +16,13 @@ fn err(e: impl std::fmt::Display) -> JsError {
 }
 
 fn batches_json(batches: &[deckcraft_collab::Batch]) -> String {
-    Value::Array(batches.iter().map(|b| json!({"seq": b.seq, "ops": b.ops, "label": b.label, "undo": if b.join { "join" } else { "step" }, "seed": b.seed})).collect())
-        .to_string()
+    Value::Array(
+        batches
+            .iter()
+            .map(|b| json!({"seq": b.seq, "ops": b.ops, "label": b.label, "undo": if b.join { "join" } else { "step" }, "seed": b.seed}))
+            .collect(),
+    )
+    .to_string()
 }
 
 /// Edit a model value through its JSON: merge `patch` (an object) into it.
@@ -182,7 +187,12 @@ impl Window {
     /// Type `text` into paragraph `pi` of a shape at character `at`, in the formatting of the run there.
     pub fn type_at(&mut self, si: usize, xi: usize, pi: usize, at: usize, text: &str) -> Result<(), JsError> {
         let mut s = self.slide_mut(si)?;
-        let p = s.shapes.get_mut(xi).and_then(|x| x.text.as_mut()).and_then(|t| t.paragraphs.get_mut(pi)).ok_or_else(|| JsError::new("no such paragraph"))?;
+        let p = s
+            .shapes
+            .get_mut(xi)
+            .and_then(|x| x.text.as_mut())
+            .and_then(|t| t.paragraphs.get_mut(pi))
+            .ok_or_else(|| JsError::new("no such paragraph"))?;
         let mut off = 0;
         for run in &mut p.runs {
             let n = run.text.chars().count();
@@ -202,7 +212,12 @@ impl Window {
     /// Make the characters `start..end` of paragraph `pi` bold (or not), splitting runs.
     pub fn bold(&mut self, si: usize, xi: usize, pi: usize, start: usize, end: usize, on: bool) -> Result<(), JsError> {
         let mut s = self.slide_mut(si)?;
-        let p = s.shapes.get_mut(xi).and_then(|x| x.text.as_mut()).and_then(|t| t.paragraphs.get_mut(pi)).ok_or_else(|| JsError::new("no such paragraph"))?;
+        let p = s
+            .shapes
+            .get_mut(xi)
+            .and_then(|x| x.text.as_mut())
+            .and_then(|t| t.paragraphs.get_mut(pi))
+            .ok_or_else(|| JsError::new("no such paragraph"))?;
         let mut runs: Vec<Run> = Vec::new();
         let mut off = 0;
         for run in &p.runs {
@@ -232,7 +247,12 @@ impl Window {
     /// Set the size of every run of paragraph `pi`.
     pub fn size(&mut self, si: usize, xi: usize, pi: usize, size: f64) -> Result<(), JsError> {
         let mut s = self.slide_mut(si)?;
-        let p = s.shapes.get_mut(xi).and_then(|x| x.text.as_mut()).and_then(|t| t.paragraphs.get_mut(pi)).ok_or_else(|| JsError::new("no such paragraph"))?;
+        let p = s
+            .shapes
+            .get_mut(xi)
+            .and_then(|x| x.text.as_mut())
+            .and_then(|t| t.paragraphs.get_mut(pi))
+            .ok_or_else(|| JsError::new("no such paragraph"))?;
         for run in &mut p.runs {
             run.props = RunProps { size: Some(size), ..run.props.clone() };
         }
@@ -243,7 +263,12 @@ impl Window {
     /// Set the outline level of paragraph `pi`.
     pub fn level(&mut self, si: usize, xi: usize, pi: usize, level: u8) -> Result<(), JsError> {
         let mut s = self.slide_mut(si)?;
-        let p = s.shapes.get_mut(xi).and_then(|x| x.text.as_mut()).and_then(|t| t.paragraphs.get_mut(pi)).ok_or_else(|| JsError::new("no such paragraph"))?;
+        let p = s
+            .shapes
+            .get_mut(xi)
+            .and_then(|x| x.text.as_mut())
+            .and_then(|t| t.paragraphs.get_mut(pi))
+            .ok_or_else(|| JsError::new("no such paragraph"))?;
         p.level = level;
         self.put(si, s);
         Ok(())
@@ -292,7 +317,12 @@ impl Window {
     pub fn add_group(&mut self, si: usize) -> Result<u32, JsError> {
         let id = self.alloc();
         let mut s = self.slide_mut(si)?;
-        s.shapes.push(Shape { id: ShapeId(id), name: format!("Group {id}"), kind: ShapeKind::Group { children: vec![], child: Default::default() }, ..Default::default() });
+        s.shapes.push(Shape {
+            id: ShapeId(id),
+            name: format!("Group {id}"),
+            kind: ShapeKind::Group { children: vec![], child: Default::default() },
+            ..Default::default()
+        });
         self.put(si, s);
         Ok(id)
     }
@@ -302,7 +332,11 @@ impl Window {
         let id = self.alloc();
         let mut s = self.slide_mut(si)?;
         let (a, b) = (s.shapes.get(from).map(|x| x.id), s.shapes.get(to).map(|x| x.id));
-        s.shapes.push(Shape { id: ShapeId(id), kind: ShapeKind::Connector { start: a.map(|i| (i, 1)), end: b.map(|i| (i, 2)) }, ..Default::default() });
+        s.shapes.push(Shape {
+            id: ShapeId(id),
+            kind: ShapeKind::Connector { start: a.map(|i| (i, 1)), end: b.map(|i| (i, 2)) },
+            ..Default::default()
+        });
         self.put(si, s);
         Ok(id)
     }
@@ -333,7 +367,11 @@ impl Window {
     pub fn add_slide(&mut self, at: usize, text: &str) -> u32 {
         let id = self.alloc();
         let sh = self.alloc();
-        let slide = Slide { id: SlideId(id), shapes: vec![Shape { id: ShapeId(sh), name: format!("Shape {sh}"), text: Some(TextBody::from_text(text)), ..Default::default() }], ..Default::default() };
+        let slide = Slide {
+            id: SlideId(id),
+            shapes: vec![Shape { id: ShapeId(sh), name: format!("Shape {sh}"), text: Some(TextBody::from_text(text)), ..Default::default() }],
+            ..Default::default()
+        };
         self.deck.slides.insert(at.min(self.deck.slides.len()), Arc::new(slide));
         id
     }
@@ -365,7 +403,13 @@ impl Window {
     /// Add a picture shape on a slide whose bytes are `bytes` (named by content). Answers the shape's id.
     pub fn add_picture(&mut self, si: usize, name: &str, bytes: &[u8]) -> Result<u32, JsError> {
         let media = MediaId(self.alloc());
-        self.deck.media.push(MediaItem { id: media, name: name.to_owned(), content_type: "image/png".into(), data: Arc::new(bytes.to_vec()), link: None });
+        self.deck.media.push(MediaItem {
+            id: media,
+            name: name.to_owned(),
+            content_type: "image/png".into(),
+            data: Arc::new(bytes.to_vec()),
+            link: None,
+        });
         let id = self.alloc();
         let mut s = self.slide_mut(si)?;
         s.shapes.push(Shape {
@@ -385,7 +429,8 @@ impl Window {
 
     /// The bytes of the picture `hash` names were found: fill the placeholder. Answers whether they were taken.
     pub fn store_media(&mut self, hash: &str, bytes: &[u8]) -> bool {
-        let item = MediaItem { id: MediaId(0), name: "found.png".into(), content_type: "image/png".into(), data: Arc::new(bytes.to_vec()), link: None };
+        let item =
+            MediaItem { id: MediaId(0), name: "found.png".into(), content_type: "image/png".into(), data: Arc::new(bytes.to_vec()), link: None };
         self.shim.media_arrived(&mut self.deck, hash, &item)
     }
 
@@ -399,7 +444,8 @@ impl Window {
     /// Add a comment on slide `si`; a reply (`reply_to` >= 0) goes under that top-level comment of the slide.
     pub fn add_comment(&mut self, si: usize, text: &str, reply_to: i32) -> Result<(), JsError> {
         let mut s = self.slide_mut(si)?;
-        let c = Comment { author: "Test".into(), initials: "T".into(), text: text.to_owned(), date: "2026-10-26T00:00:00Z".into(), ..Default::default() };
+        let c =
+            Comment { author: "Test".into(), initials: "T".into(), text: text.to_owned(), date: "2026-10-26T00:00:00Z".into(), ..Default::default() };
         if reply_to >= 0 {
             s.comments.get_mut(reply_to as usize).ok_or_else(|| JsError::new("no such comment"))?.replies.push(c);
         } else {
@@ -466,4 +512,91 @@ pub fn sample_spec(n: u32, first: u32) -> String {
         slides.push(json!({"id": sid, "shapes": [{"id": t, "name": "Title", "text": format!("Slide {}", i + 1)}, {"id": b, "name": "Body", "text": "First point\nSecond point"}], "notes": format!("Notes {}", i + 1)}));
     }
     json!({"slides": slides}).to_string()
+}
+
+/// One Slides window as the browser build is to the host (`apps/deckcraft-web`'s `craft:open`, `craft:command`, `craft:save`), on the
+/// engine and the app shell alone: it opens a deck from its bytes, runs the assistant's `command.batch`
+/// (`deckcraft_ui_egui::SlideApp::run_command_batch`, the function the window answers `craft:command` with) and writes the file a
+/// Save would hand the host. OneOS's AI-drive tests drive a deck through the `slides.*` tools with it; nothing here is a second
+/// implementation.
+#[wasm_bindgen]
+pub struct HostWindow {
+    app: deckcraft_ui_egui::SlideApp,
+    name: String,
+}
+
+#[wasm_bindgen]
+impl HostWindow {
+    /// Open `name`'s bytes (base64), or a new deck with a title slide when there are none. `client` is the party number the host
+    /// would give the window; the AI drive has no collaboration, so it is unused.
+    #[wasm_bindgen(constructor)]
+    pub fn new(_client: u32, name: String, file_b64: String) -> Result<HostWindow, JsError> {
+        let mut session = deckcraft_engine::Session::new();
+        if file_b64.is_empty() {
+            session.execute("file.new", &serde_json::json!({})).map_err(err)?;
+        } else {
+            session.execute("file.openBytes", &serde_json::json!({"name": name, "data": file_b64})).map_err(err)?;
+        }
+        Ok(HostWindow { app: deckcraft_ui_egui::SlideApp::new(session, deckcraft_ui_egui::Services::default()), name })
+    }
+
+    /// The window's `command.batch`: `params_json` is the host's `{label, steps}`; the answer is the `result` of `craft:result` as
+    /// JSON, or an error carrying its `<code>: <reason>` text.
+    pub fn command_batch(&mut self, params_json: &str) -> Result<String, JsError> {
+        let params: Value = serde_json::from_str(params_json).map_err(err)?;
+        let result = self.app.run_command_batch(&params).map_err(|e| JsError::new(&e))?;
+        Ok(result.to_string())
+    }
+
+    /// A registry command as the person's own menu runs it (Undo, in the tests), answered as JSON.
+    pub fn run(&mut self, command: &str, params_json: &str) -> Result<String, JsError> {
+        let params: Value = serde_json::from_str(params_json).map_err(err)?;
+        let result = self.app.run(command, params).map_err(|e| JsError::new(&e))?;
+        Ok(result.to_string())
+    }
+
+    /// The file a Save would hand the host, base64: the deck encoded as the file it was opened as (`.deckcraft` when its name says
+    /// no format DeckCraft writes).
+    pub fn file_b64(&self) -> Result<String, JsError> {
+        let doc = &self.app.session.active().ok_or_else(|| JsError::new("no presentation is open"))?.doc;
+        let format = deckcraft_engine::cmd::file::writable_format_for_path(&self.name).unwrap_or("deckcraft");
+        let bytes = deckcraft_engine::cmd::file::save_bytes(doc, format).map_err(err)?;
+        Ok(deckcraft_engine::cmd::base64_encode(&bytes))
+    }
+
+    /// Whether the deck has changes the host does not hold yet.
+    pub fn dirty(&self) -> bool {
+        self.app.session.active().is_some_and(|d| d.is_dirty())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Corpus G1: Slides had no node host window, so no AI-drive test could reach it. The window opens a deck from bytes, runs a
+    /// command.batch as one undo step, and saves the file it was opened as.
+    #[test]
+    fn host_window_runs_a_batch_and_saves_the_edited_deck() {
+        let mut deck = deckcraft_engine::Session::with_new();
+        deck.execute("slide.new", &json!({"layout": "titleAndContent", "title": "Agenda"})).unwrap();
+        let pptx = deckcraft_engine::cmd::file::save_bytes(&deck.active().unwrap().doc, "pptx").unwrap();
+        let mut w = HostWindow::new(7, "talk.pptx".into(), deckcraft_engine::cmd::base64_encode(&pptx)).unwrap();
+        assert!(!w.dirty());
+        let r: Value = serde_json::from_str(
+            &w.command_batch(r#"{"label":"Add a closing slide","steps":[{"name":"slide.new","args":{"title":"Thank you"}},{"name":"inspect"}]}"#)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(r["undoStep"], json!(true), "{r}");
+        assert_eq!(r["steps"][1]["result"]["slides"], json!(3), "{r}");
+        assert!(w.dirty());
+        let saved = deckcraft_engine::cmd::base64_decode(&w.file_b64().unwrap()).unwrap();
+        let back = deckcraft_engine::cmd::file::open_presentation("talk.pptx", &saved).unwrap();
+        assert!(back.slides.iter().any(|s| s.title() == "Thank you"), "the saved .pptx has the assistant's slide");
+        // Undo takes the whole run back.
+        w.run("edit.undo", "{}").unwrap();
+        let saved = deckcraft_engine::cmd::base64_decode(&w.file_b64().unwrap()).unwrap();
+        assert_eq!(deckcraft_engine::cmd::file::open_presentation("talk.pptx", &saved).unwrap().slides.len(), 2);
+    }
 }
