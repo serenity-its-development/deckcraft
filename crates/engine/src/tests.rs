@@ -5406,3 +5406,33 @@ fn slide_hide_and_layout_reject_invalid_index() {
     }
     assert!(s.doc().unwrap().doc.slides.iter().all(|x| !x.hidden));
 }
+
+/// Corpus D3 (`pptx/with_japanese.pptx`): a "Resize shape to fit text" box saved with `cy="0"`
+/// and centred text drew half its lines above the slide, so they were missing from the PDF.
+#[test]
+fn an_autofit_box_shorter_than_its_text_grows_down_on_open() {
+    use deckcraft_model::text::{AutoFit, TextBody};
+    use deckcraft_model::{Shape, ShapeId, ShapeKind, defaults};
+    let mut p = defaults::new_presentation(None);
+    let mut body = TextBody::from_text("one\ntwo\nthree\nfour\nfive");
+    body.body.autofit = Some(AutoFit::Shape);
+    body.body.anchor = Some(deckcraft_model::text::Anchor::Middle);
+    let sh = Shape {
+        id: ShapeId(9000),
+        name: "Body".into(),
+        xfrm: Some(deckcraft_geom::Xfrm { x: 0.0, y: 36.0, w: 720.0, h: 0.0, ..Default::default() }),
+        kind: ShapeKind::Shape,
+        text: Some(body.clone()),
+        ..Default::default()
+    };
+    let mut fixed = sh.clone();
+    fixed.id = ShapeId(9001);
+    fixed.text.as_mut().unwrap().body.autofit = Some(AutoFit::None);
+    std::sync::Arc::make_mut(&mut p.slides[0]).shapes.extend([sh, fixed]);
+    p.fix_next_id();
+    crate::cmd::file::grow_auto_fit_boxes(&mut p);
+    let x = p.slides[0].shape(ShapeId(9000)).unwrap().xfrm.unwrap();
+    assert_eq!(x.y, 36.0, "the top stays");
+    assert!(x.h > 5.0 * 12.0, "the box holds its five lines: {}", x.h);
+    assert_eq!(p.slides[0].shape(ShapeId(9001)).unwrap().xfrm.unwrap().h, 0.0, "a box that doesn't resize to its text keeps its size");
+}

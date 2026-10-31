@@ -161,6 +161,7 @@ fn open_other(name: &str, bytes: &[u8]) -> Result<(Presentation, Vec<String>)> {
         let (mut p, lost_slides) = deckcraft_pptx::import_checked(bytes).map_err(|e| EngineError::Other(e.to_string()))?;
         deckcraft_format::repair(&mut p);
         probe_clips(&mut p);
+        grow_auto_fit_boxes(&mut p);
         return Ok((p, lost_slides));
     }
     if deckcraft_pptx::odp::sniff(bytes) {
@@ -188,6 +189,43 @@ fn open_other(name: &str, bytes: &[u8]) -> Result<(Presentation, Vec<String>)> {
         return Ok((p, vec![]));
     }
     Err(EngineError::Other(format!("{name}: not a presentation DeckCraft can read")))
+}
+
+/// "Resize shape to fit text" boxes whose stored box is shorter than their text (a converter
+/// that wrote `cy="0"`, an edit in an app that doesn't refit) grow to hold it, keeping their top
+/// edge, as the box is refitted on the next edit anyway. Otherwise the text overflows the box both
+/// ways and a box near the top of the slide loses its first lines off the page (corpus D3,
+/// `pptx/with_japanese.pptx`). Unrotated slide-level shapes only; boxes are never shrunk.
+pub fn grow_auto_fit_boxes(p: &mut Presentation) {
+    use deckcraft_model::resolve::{self, Ctx};
+    use deckcraft_model::text::AutoFit;
+    let mut grow: Vec<(usize, deckcraft_model::ShapeId, f64)> = vec![];
+    for (si, slide) in p.slides.iter().enumerate() {
+        let Some(ctx) = Ctx::for_slide(p, slide) else { continue };
+        for sh in &slide.shapes {
+            let (Some(x), Some(body)) = (sh.xfrm, sh.text.as_ref()) else { continue };
+            if !matches!(sh.kind, ShapeKind::Shape) || sh.ph.is_some() || x.rot != 0.0 || body.is_empty() || !x.w.is_finite() || !x.h.is_finite() {
+                continue;
+            }
+            if resolve::body(&ctx, sh).autofit != Some(AutoFit::Shape) {
+                continue;
+            }
+            let geo = deckcraft_render::shape_geometry(sh, x.w, x.h);
+            let need = deckcraft_text::fit_height(&ctx, sh, body, geo.text_rect, &deckcraft_text::NoFields);
+            let want = need + (x.h - geo.text_rect.height()).max(0.0);
+            if want.is_finite() && want > x.h + 0.5 {
+                grow.push((si, sh.id, want));
+            }
+        }
+    }
+    for (si, id, h) in grow {
+        if let Some(slide) = p.slides.get_mut(si)
+            && let Some(sh) = Arc::make_mut(slide).shape_mut(id)
+            && let Some(x) = sh.xfrm.as_mut()
+        {
+            x.h = h;
+        }
+    }
 }
 
 /// Fill in each audio and video clip's length and picture size from its bytes: a `.pptx` doesn't
