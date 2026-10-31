@@ -83,7 +83,9 @@ pub struct Bridge {
 fn plain_origin(v: &str) -> bool {
     let Some((scheme, rest)) = v.split_once("://") else { return false };
     let local = rest == "localhost" || rest.starts_with("localhost:") || rest.starts_with("127.0.0.1");
-    (scheme == "https" || (scheme == "http" && local)) && !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b':'))
+    (scheme == "https" || (scheme == "http" && local))
+        && !rest.is_empty()
+        && rest.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b':'))
 }
 
 impl Bridge {
@@ -131,7 +133,8 @@ impl Bridge {
             if last.0 != session {
                 *last = (session.clone(), None);
             }
-            if last.1 != Some(dirty) && bridge.send(&[("type", "craft:dirty".into()), ("session", session.as_str().into()), ("dirty", dirty.into())]) {
+            if last.1 != Some(dirty) && bridge.send(&[("type", "craft:dirty".into()), ("session", session.as_str().into()), ("dirty", dirty.into())])
+            {
                 last.1 = Some(dirty);
             }
         }));
@@ -315,7 +318,11 @@ impl Bridge {
                     if string(&data, "session").as_deref() != Some(known.as_str()) {
                         return;
                     }
-                    let body = js_sys::JSON::stringify(&data).ok().and_then(|s| s.as_string()).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null);
+                    let body = js_sys::JSON::stringify(&data)
+                        .ok()
+                        .and_then(|s| s.as_string())
+                        .and_then(|s| serde_json::from_str(&s).ok())
+                        .unwrap_or(serde_json::Value::Null);
                     bridge.shared.borrow_mut().events.push_back(Event::Crdt { kind: rest.to_owned(), body });
                 }
             }

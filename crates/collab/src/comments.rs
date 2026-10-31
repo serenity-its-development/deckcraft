@@ -216,7 +216,12 @@ impl CommentSync {
         // The numbers first, so a reply can name its parent.
         let mut by_host: HashMap<&str, u32> = HashMap::new();
         for (id, c) in map {
-            let wc = c.get("anchor").and_then(|a| a.get("wc")).and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| derived_wc(id));
+            let wc = c
+                .get("anchor")
+                .and_then(|a| a.get("wc"))
+                .and_then(Value::as_u64)
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or_else(|| derived_wc(id));
             by_host.insert(id.as_str(), wc);
         }
         for (id, wc) in &by_host {
@@ -238,7 +243,16 @@ impl CommentSync {
             self.known.insert(wc, want);
             let name = c.get("name").and_then(Value::as_str).unwrap_or("Someone").to_owned();
             let at = c.get("at").and_then(Value::as_u64).unwrap_or(0);
-            update.upsert.push(RemoteComment { wc, initials: initials_of(&name), author: name, date: iso_of(at), parent, resolved, text, anchor: c.get("anchor").cloned().unwrap_or(Value::Null) });
+            update.upsert.push(RemoteComment {
+                wc,
+                initials: initials_of(&name),
+                author: name,
+                date: iso_of(at),
+                parent,
+                resolved,
+                text,
+                anchor: c.get("anchor").cloned().unwrap_or(Value::Null),
+            });
         }
         // Gone from the host.
         let live: HashSet<u32> = by_host.values().copied().collect();

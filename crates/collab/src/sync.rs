@@ -77,7 +77,11 @@ pub fn plain(v: &Value) -> &Value {
 
 fn bounded(what: &str, v: &Value) -> Result<(), ShimError> {
     let n = v.to_string().len();
-    if n > MAX_VALUE { Err(ShimError::TooLarge(format!("{what} is {n} bytes of data - more than one shared value holds ({MAX_VALUE})"))) } else { Ok(()) }
+    if n > MAX_VALUE {
+        Err(ShimError::TooLarge(format!("{what} is {n} bytes of data - more than one shared value holds ({MAX_VALUE})")))
+    } else {
+        Ok(())
+    }
 }
 
 /// The node of the view at a path.

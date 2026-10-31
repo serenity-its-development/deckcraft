@@ -53,7 +53,10 @@ use comments::{CommentMsg, CommentSync};
 use ids::Ids;
 use media::MediaIndex;
 use mirror::{Marks, Mirror, MirrorError};
-use sync::{FIELD, OBJ_CHAR, OBJECT, P, Text, canon, ensure_map, list_ids, node, node_in, normalize, path_of, plain, put_fields, put_list, put_text, put_value, read_fields, read_value};
+use sync::{
+    FIELD, OBJ_CHAR, OBJECT, P, Text, canon, ensure_map, list_ids, node, node_in, normalize, path_of, plain, put_fields, put_list, put_text,
+    put_value, read_fields, read_value,
+};
 
 /// A local batch is taken as applied by the host this long after it was sent, if no message acknowledged it sooner.
 pub const PENDING_MS: u64 = 5_000;
@@ -607,7 +610,7 @@ impl Shim {
             Ok(())
         })?;
         // Slides gone from the deck.
-        let have = list_ids(view, &vec![], "slides").unwrap_or_default();
+        let have = list_ids(view, &[], "slides").unwrap_or_default();
         for sk in &have {
             if !wanted_slides.contains(sk) {
                 let before = owned_by(view, sk);
@@ -733,7 +736,7 @@ impl Shim {
             i.media.refresh(&deck.media);
             i.new_media.clear();
         }
-        let keys = list_ids(&self.view, &vec![], "slides").unwrap_or_default();
+        let keys = list_ids(&self.view, &[], "slides").unwrap_or_default();
         let by_id: HashMap<SlideId, Arc<Slide>> = deck.slides.iter().map(|s| (s.id, s.clone())).collect();
         let mut next: Vec<Arc<Slide>> = Vec::with_capacity(keys.len());
         let this = &*self;
@@ -758,7 +761,12 @@ impl Shim {
         // Pictures this window met an address for and has no bytes of: empty items stand in until they arrive.
         let made: Vec<(deckcraft_model::MediaId, String)> = std::mem::take(&mut ids.0.borrow_mut().new_media);
         for (id, _) in &made {
-            deck.media.push(deckcraft_model::MediaItem { id: *id, name: "picture".into(), content_type: "application/octet-stream".into(), ..Default::default() });
+            deck.media.push(deckcraft_model::MediaItem {
+                id: *id,
+                name: "picture".into(),
+                content_type: "application/octet-stream".into(),
+                ..Default::default()
+            });
         }
         ids.0.borrow_mut().media.refresh(&deck.media);
         deck.next_id = deck.next_id.max(ids.0.borrow().next_id);
@@ -819,8 +827,11 @@ impl Shim {
                 let mut view = truth.clone();
                 for (_, _, ops) in &self.pending {
                     for op in ops {
-                        let path: Vec<String> =
-                            op.get("path").and_then(Value::as_array).map(|p| p.iter().filter_map(|s| s.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+                        let path: Vec<String> = op
+                            .get("path")
+                            .and_then(Value::as_array)
+                            .map(|p| p.iter().filter_map(|s| s.as_str().map(str::to_owned)).collect())
+                            .unwrap_or_default();
                         note(&path, op.get("key").and_then(Value::as_str));
                         let _ = view.apply(op);
                     }
@@ -864,7 +875,7 @@ impl Shim {
     /// Which slide owns each shape and paragraph key, as the view holds them now.
     fn owner_index(&self) -> HashMap<String, String> {
         let mut out = HashMap::new();
-        for sk in list_ids(&self.view, &vec![], "slides").unwrap_or_default() {
+        for sk in list_ids(&self.view, &[], "slides").unwrap_or_default() {
             let o = owned_by(&self.view, &sk);
             for k in o.shapes.into_iter().chain(o.paras) {
                 out.insert(k, sk.clone());
@@ -915,7 +926,11 @@ impl Shim {
     pub fn peer_cursor(&self, cursor: &Value) -> Option<PeerCursor> {
         let ids = self.ids.0.borrow();
         let slide = ids.known_slide(cursor.get("s")?.as_str()?)?;
-        let shapes = cursor.get("x").and_then(Value::as_array).map(|a| a.iter().filter_map(|k| k.as_str().and_then(|k| ids.known_shape(k))).collect()).unwrap_or_default();
+        let shapes = cursor
+            .get("x")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|k| k.as_str().and_then(|k| ids.known_shape(k))).collect())
+            .unwrap_or_default();
         Some(PeerCursor { slide, shapes })
     }
 
@@ -983,7 +998,7 @@ impl Shim {
     /// The deck's slide keys in order, as the view holds them.
     #[must_use]
     pub fn slide_keys(&self) -> Vec<String> {
-        list_ids(&self.view, &vec![], "slides").unwrap_or_default()
+        list_ids(&self.view, &[], "slides").unwrap_or_default()
     }
 
     /// The shared per-slide notes and shape count (for tests): `BTreeMap<slide key, shape keys>`.

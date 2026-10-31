@@ -85,7 +85,9 @@ macro_rules! coded_id {
             fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
                 match d.deserialize_any(IdVisitor { what: $what })? {
                     Ok(n) => Ok($name(n)),
-                    Err(key) => current().and_then(|c| c.$inn(&key)).ok_or_else(|| de::Error::custom(format!("no {} for the shared key {key}", $what))),
+                    Err(key) => {
+                        current().and_then(|c| c.$inn(&key)).ok_or_else(|| de::Error::custom(format!("no {} for the shared key {key}", $what)))
+                    }
                 }
             }
         }

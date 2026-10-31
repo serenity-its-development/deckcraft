@@ -6,13 +6,14 @@ fn shape(id: u32, text: &str) -> Shape {
 }
 
 fn deck() -> Presentation {
-    let mut d = Presentation::default();
-    d.slides = vec![
-        Arc::new(Slide { id: SlideId(2), shapes: vec![shape(10, "Title\nsecond line"), shape(11, "Body")], ..Default::default() }),
-        Arc::new(Slide { id: SlideId(3), shapes: vec![shape(12, "Other slide")], ..Default::default() }),
-    ];
-    d.next_id = 40;
-    d
+    Presentation {
+        slides: vec![
+            Arc::new(Slide { id: SlideId(2), shapes: vec![shape(10, "Title\nsecond line"), shape(11, "Body")], ..Default::default() }),
+            Arc::new(Slide { id: SlideId(3), shapes: vec![shape(12, "Other slide")], ..Default::default() }),
+        ],
+        next_id: 40,
+        ..Default::default()
+    }
 }
 
 fn texts(d: &Presentation) -> Vec<Vec<String>> {
@@ -104,15 +105,19 @@ fn a_group_nests_by_keys_and_a_connector_names_a_shape_by_its_shared_key() {
     use deckcraft_model::Xfrm;
     let mut da = deck();
     let mut a = Shim::new(11);
-    let group = Shape { id: ShapeId(20), kind: ShapeKind::Group { children: vec![shape(21, "in the group")], child: Xfrm::default() }, ..Default::default() };
-    let connector = Shape { id: ShapeId(22), kind: ShapeKind::Connector { start: Some((ShapeId(20), 1)), end: Some((ShapeId(11), 2)) }, ..Default::default() };
+    let group =
+        Shape { id: ShapeId(20), kind: ShapeKind::Group { children: vec![shape(21, "in the group")], child: Xfrm::default() }, ..Default::default() };
+    let connector =
+        Shape { id: ShapeId(22), kind: ShapeKind::Connector { start: Some((ShapeId(20), 1)), end: Some((ShapeId(11), 2)) }, ..Default::default() };
     let mut s = (*da.slides[0]).clone();
     s.shapes.push(group);
     s.shapes.push(connector);
     da.slides[0] = Arc::new(s);
     let (_, db) = joined(&mut a, &da);
     let shapes = &db.slides[0].shapes;
-    assert!(matches!(&shapes[2].kind, ShapeKind::Group { children, .. } if children.len() == 1 && children[0].text.as_ref().map(TextBody::text).as_deref() == Some("in the group")));
+    assert!(
+        matches!(&shapes[2].kind, ShapeKind::Group { children, .. } if children.len() == 1 && children[0].text.as_ref().map(TextBody::text).as_deref() == Some("in the group"))
+    );
     // The connector's ends are this window's ids for the same shapes.
     let ShapeKind::Connector { start, end } = &shapes[3].kind else { panic!("connector") };
     assert_eq!(start.map(|(id, _)| id), Some(shapes[2].id));

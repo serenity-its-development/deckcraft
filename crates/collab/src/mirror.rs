@@ -173,11 +173,8 @@ impl Mirror {
     /// Apply one op of the host's contract.
     pub fn apply(&mut self, op: &Value) -> Result<(), MirrorError> {
         let kind = op.get("op").and_then(Value::as_str).unwrap_or_default();
-        let path: Path = op
-            .get("path")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_owned)).collect())
-            .unwrap_or_default();
+        let path: Path =
+            op.get("path").and_then(Value::as_array).map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_owned)).collect()).unwrap_or_default();
         let key = op.get("key").and_then(Value::as_str);
         let node = node_at(&mut self.root, &path).ok_or_else(|| MirrorError(format!("craft-path-missing: nothing is at {}", path.join("/"))))?;
         match kind {

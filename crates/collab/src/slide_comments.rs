@@ -13,7 +13,7 @@ use deckcraft_model::{Comment, Presentation, ShapeId, Slide};
 use serde_json::{Value, json};
 
 use crate::comments::{CommentMsg, LocalComment};
-use crate::{Shim, ShimError, Change};
+use crate::{Change, Shim, ShimError};
 
 /// One comment as the sync holds it: the entry without its replies, and where its parent is in the flattened list.
 pub type Flat = (Comment, Option<usize>);
@@ -182,7 +182,12 @@ impl Shim {
         let Some(map) = host.as_object() else { return out };
         let mut wc_of: BTreeMap<&str, u32> = BTreeMap::new();
         for (id, c) in map {
-            let wc = c.get("anchor").and_then(|a| a.get("wc")).and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()).unwrap_or_else(|| crate::comments::derived_wc(id));
+            let wc = c
+                .get("anchor")
+                .and_then(|a| a.get("wc"))
+                .and_then(Value::as_u64)
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or_else(|| crate::comments::derived_wc(id));
             wc_of.insert(id.as_str(), wc);
         }
         // Slides first for the comments that state one, then the replies that follow their parent.
