@@ -205,7 +205,11 @@ impl Collab {
     }
 
     /// Show what the shim read: the deck is changed in place (no undo step, no unsaved-state change of its own).
-    fn show(&mut self, app: &mut SlideApp, f: impl FnOnce(&mut Shim, &mut Presentation) -> Result<bool, deckcraft_collab::ShimError>) -> Result<(), String> {
+    fn show(
+        &mut self,
+        app: &mut SlideApp,
+        f: impl FnOnce(&mut Shim, &mut Presentation) -> Result<bool, deckcraft_collab::ShimError>,
+    ) -> Result<(), String> {
         let mut outcome: Result<bool, deckcraft_collab::ShimError> = Ok(false);
         let shim = &mut self.shim;
         app.session.change_remote(|deck| outcome = f(shim, deck)).map_err(|e| e.to_string())?;
@@ -296,9 +300,12 @@ impl Collab {
                     "potx" | "ppsx" | "deckcraft" => ext.as_str(),
                     _ => "pptx",
                 };
+                // A .ppt is never written back: the checkpoint goes to <stem>.pptx (files/973, 975).
+                let legacy = deckcraft_engine::cmd::file::is_legacy_name(&opened.name);
+                let name = if legacy { deckcraft_engine::cmd::file::pptx_beside(&opened.name) } else { opened.name.clone() };
                 match deckcraft_engine::cmd::file::save_bytes(&deck, format) {
                     Ok(bytes) => {
-                        if let Err(e) = self.bridge.post_save(&opened.name, &bytes, false, request) {
+                        if let Err(e) = self.bridge.post_save(&name, &bytes, legacy, request) {
                             app.set_status(format!("The checkpoint was not sent: {e}"));
                         }
                     }
@@ -401,7 +408,11 @@ impl Collab {
         let Some(slide) = d.current_slide() else { return };
         let Some(body) = self.shim.cursor_for(slide.id, &d.selection.shapes) else { return };
         let moved = self.last_cursor.as_ref() != Some(&body);
-        let due = if moved { now.saturating_sub(self.last_cursor_ms) >= CURSOR_MIN_MS } else { now.saturating_sub(self.last_cursor_ms) >= CURSOR_REPEAT_MS };
+        let due = if moved {
+            now.saturating_sub(self.last_cursor_ms) >= CURSOR_MIN_MS
+        } else {
+            now.saturating_sub(self.last_cursor_ms) >= CURSOR_REPEAT_MS
+        };
         if !due {
             return;
         }
@@ -415,7 +426,9 @@ impl Collab {
         let cursors: Vec<RemoteCursor> = self
             .peers
             .values()
-            .filter_map(|p| self.shim.peer_cursor(&p.cursor).map(|c| RemoteCursor { name: p.name.clone(), color: p.color, slide: c.slide, shapes: c.shapes }))
+            .filter_map(|p| {
+                self.shim.peer_cursor(&p.cursor).map(|c| RemoteCursor { name: p.name.clone(), color: p.color, slide: c.slide, shapes: c.shapes })
+            })
             .collect();
         if cursors != app.session.remote_cursors {
             app.session.remote_cursors = cursors;

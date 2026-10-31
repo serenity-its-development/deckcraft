@@ -4744,8 +4744,13 @@ fn background_loads_are_adopted_through_a_command() {
     replay.execute(&id, &params).unwrap();
     assert_eq!(replay.doc().unwrap().doc.slides.len(), 2);
     // A token staged for another path is not taken for this one.
-    let other =
-        s.stage_loaded(cmd::file::LoadedFile { path: "/elsewhere.pptx".into(), doc: Default::default(), native: true, damaged: Default::default() });
+    let other = s.stage_loaded(cmd::file::LoadedFile {
+        path: "/elsewhere.pptx".into(),
+        doc: Default::default(),
+        native: true,
+        damaged: Default::default(),
+        legacy: false,
+    });
     s.execute("file.adopt", &json!({"path": path, "token": other})).unwrap();
     assert_eq!(s.doc().unwrap().doc.slides.len(), 2);
     assert!(s.execute("file.adopt", &json!({})).is_err());
@@ -5436,4 +5441,84 @@ fn an_autofit_box_shorter_than_its_text_grows_down_on_open() {
     assert_eq!(x.y, 36.0, "the top stays");
     assert!(x.h > 5.0 * 12.0, "the box holds its five lines: {}", x.h);
     assert_eq!(p.slides[0].shape(ShapeId(9001)).unwrap().xfrm.unwrap().h, 0.0, "a box that doesn't resize to its text keeps its size");
+}
+
+/// The PowerPoint 97-2003 deck `deckcraft-pptx` builds for its tests (`ppt::fixture::plan`).
+const LEGACY_PLAN: &[u8] = include_bytes!("../../pptx/tests/fixtures/plan.ppt");
+
+fn placeholder_text(slide: &deckcraft_model::Slide, kinds: &[deckcraft_model::PhType]) -> String {
+    slide
+        .shapes
+        .iter()
+        .find(|sh| sh.ph.as_ref().is_some_and(|ph| kinds.contains(&ph.kind)))
+        .and_then(|sh| sh.text.as_ref())
+        .map(|t| t.text())
+        .unwrap_or_default()
+}
+
+/// files/973, 975: a legacy .ppt opens in Slides with its titles, text and notes; it has no file
+/// to save to, a save over it is refused, and Save As .pptx writes a new file that reopens with
+/// the text while the .ppt is never written.
+#[test]
+fn a_legacy_ppt_opens_and_saves_as_pptx_beside_it() {
+    use deckcraft_model::PhType;
+    let dir = std::env::temp_dir().join(format!("deckcraft-ppt-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let original = dir.join("Plan.ppt");
+    std::fs::write(&original, LEGACY_PLAN).unwrap();
+    let path = original.to_string_lossy().to_string();
+
+    let mut s = session();
+    let r = s.execute("file.open", &json!({"path": path})).unwrap();
+    assert_eq!(r["slides"], 2);
+    let st = s.doc().unwrap();
+    assert_eq!(st.path, None, "no save target: Save never writes the .ppt");
+    assert_eq!(st.legacy_source.as_deref(), Some(path.as_str()));
+    assert_eq!(st.title(), "Plan");
+    assert_eq!(placeholder_text(&st.doc.slides[0], &[PhType::Title]), "Quarterly plan");
+    assert_eq!(placeholder_text(&st.doc.slides[0], &[PhType::Obj, PhType::Body]), "Grow revenue\nHire two engineers\u{b}in Brisbane\nDraft only");
+    assert_eq!(st.doc.slides[0].notes_text(), "Open with the numbers");
+    assert!(
+        s.ui_requests.iter().any(|r| matches!(r, crate::UiRequest::Message { text } if text.starts_with("Plan.ppt is an older PowerPoint file")))
+    );
+
+    s.execute("text.set", &json!({"text": "Edited"})).ok();
+    assert_eq!(s.execute("file.save", &json!({})).unwrap()["needsPath"], true);
+    let err = s.execute("file.save", &json!({"path": path})).unwrap_err().to_string();
+    assert!(err.contains("Plan.ppt is an older PowerPoint file") && err.contains("Plan.pptx"), "{err}");
+    assert_eq!(std::fs::read(&original).unwrap(), LEGACY_PLAN);
+
+    let beside = cmd::file::pptx_beside(&path);
+    assert_eq!(beside, dir.join("Plan.pptx").to_string_lossy());
+    s.execute("file.saveAs", &json!({"path": beside})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.path.as_deref(), Some(beside.as_str()));
+    assert_eq!(st.legacy_source, None);
+    assert_eq!(std::fs::read(&original).unwrap(), LEGACY_PLAN, "the original is never written");
+    let saved = std::fs::read(&beside).unwrap();
+    assert!(deckcraft_pptx::sniff(&saved));
+    let back = cmd::file::open_presentation("Plan.pptx", &saved).unwrap();
+    assert_eq!(back.slides.len(), 2);
+    assert_eq!(placeholder_text(&back.slides[1], &[PhType::Title]), "Risks");
+    assert_eq!(placeholder_text(&back.slides[1], &[PhType::Obj, PhType::Body]), "Supply delays\nCaf\u{e9} lease");
+    assert_eq!(back.slides[0].notes_text(), "Open with the numbers");
+
+    // Opened from bytes (the browser), it is a legacy import too.
+    let data = cmd::base64_encode(LEGACY_PLAN);
+    s.execute("file.openBytes", &json!({"name": "Plan.ppt", "data": data})).unwrap();
+    assert_eq!(s.doc().unwrap().legacy_source.as_deref(), Some("Plan.ppt"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn legacy_names() {
+    use cmd::file::{is_legacy_name, pptx_beside};
+    for n in ["a.ppt", "B.PPS", "c.Pot", "/x/y/deck.ppt"] {
+        assert!(is_legacy_name(n), "{n}");
+    }
+    for n in ["a.pptx", "a.potx", "ppt", "a.ppt.bak", "a.odp"] {
+        assert!(!is_legacy_name(n), "{n}");
+    }
+    assert_eq!(pptx_beside("Plan.pps"), "Plan.pptx");
 }

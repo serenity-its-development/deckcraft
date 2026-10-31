@@ -113,14 +113,24 @@ fn services() -> Services {
                 "video" => d.add_filter("Video", &["mp4", "m4v", "mov", "webm", "mkv", "wmv"]),
                 "theme" => d.add_filter("Themes and presentations", &["thmx", "pptx", "potx", "ppsx"]).add_filter("Office Theme", &["thmx"]),
                 _ => d
-                    .add_filter("Presentations", &["deckcraft", "pptx", "potx", "ppsx"])
+                    .add_filter("Presentations", &["deckcraft", "pptx", "potx", "ppsx", "ppt", "pps", "pot"])
                     .add_filter("DeckCraft", &["deckcraft"])
                     .add_filter("PowerPoint", &["pptx", "potx", "ppsx"])
+                    .add_filter("PowerPoint 97-2003", &["ppt", "pps", "pot"])
                     .add_filter("Outline", &["txt", "md"]),
             };
             d.pick_file().map(|p| p.to_string_lossy().to_string())
         })),
-        pick_save: Some(Box::new(|name: &str| rfd::FileDialog::new().set_file_name(name).save_file().map(|p| p.to_string_lossy().to_string()))),
+        // A suggestion with a folder (a .ppt's <stem>.pptx beside it) opens the dialog in that folder.
+        pick_save: Some(Box::new(|name: &str| {
+            let suggested = std::path::Path::new(name);
+            let mut d = rfd::FileDialog::new();
+            if let Some(dir) = suggested.parent().filter(|d| !d.as_os_str().is_empty()) {
+                d = d.set_directory(dir);
+            }
+            let file = suggested.file_name().map_or_else(|| name.to_string(), |n| n.to_string_lossy().into_owned());
+            d.set_file_name(file).save_file().map(|p| p.to_string_lossy().to_string())
+        })),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
         clipboard_image: Some(Box::new(pasteboard::image_png)),

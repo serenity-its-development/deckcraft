@@ -578,3 +578,93 @@ fn options_in_backstage_opens_preferences_and_cancel_closes_it() {
     assert!(h.state().dialog.is_none(), "Cancel closes Preferences dialog");
     assert!(h.state().backstage_open(), "Backstage remains open");
 }
+
+/// The PowerPoint 97-2003 deck `deckcraft-pptx` builds for its tests (`ppt::fixture::plan`).
+const LEGACY_PLAN: &[u8] = include_bytes!("../../pptx/tests/fixtures/plan.ppt");
+
+/// files/973, 975: the Save dialog's statement for a presentation read from a .ppt.
+#[test]
+fn the_legacy_save_note_names_both_files() {
+    assert_eq!(
+        crate::legacy_save_note("/home/me/Plan.ppt").as_deref(),
+        Some("Plan.ppt is an older PowerPoint file: it saves as Plan.pptx beside the original, which is never changed.")
+    );
+    assert_eq!(
+        crate::legacy_save_note("Show.PPS").as_deref(),
+        Some("Show.PPS is an older PowerPoint file: it saves as Show.pptx beside the original, which is never changed.")
+    );
+    for name in ["Plan.pptx", "Plan.potx", "Plan.deckcraft", "Plan"] {
+        assert_eq!(crate::legacy_save_note(name), None, "{name}");
+    }
+}
+
+/// A .ppt opens for editing; File › Save goes to Save As, which states where it saves; the
+/// Save dialog suggests <stem>.pptx in the .ppt's folder; the .ppt is never written.
+#[test]
+fn a_legacy_ppt_saves_as_pptx_beside_the_original() {
+    let dir = temp_dir("legacy-ppt");
+    let original = dir.join("Plan.ppt");
+    std::fs::write(&original, LEGACY_PLAN).unwrap();
+    let (services, asked) = saving_into(&dir);
+    let mut app = SlideApp::new(Session::with_new(), services);
+    app.open_path(&original.to_string_lossy()).unwrap();
+    assert_eq!(app.session.active().unwrap().doc.slides.len(), 2);
+    assert_eq!(app.legacy_source().as_deref(), Some(original.to_string_lossy().as_ref()));
+    let mut h = harness(app);
+    h.state_mut().run("slide.new", json!({})).unwrap();
+
+    h.state_mut().run("app.backstage", json!({})).unwrap();
+    h.run_steps(3);
+    click_nav(&h, "Save");
+    h.run_steps(3);
+    assert_eq!(page(&h), Some(Page::SaveAs), "a .ppt has no file to save to");
+    let note = "Plan.ppt is an older PowerPoint file: it saves as Plan.pptx beside the original, which is never changed.";
+    assert!(h.query_by_label(note).is_some(), "the Save As page states it");
+    click_on_page(&h, "Save");
+    h.run_steps(3);
+    let pptx = dir.join("Plan.pptx");
+    assert_eq!(*asked.borrow(), vec![pptx.to_string_lossy().to_string()], "the dialog suggests Plan.pptx beside the .ppt");
+    assert_eq!(h.state().session.active().unwrap().path.as_deref(), Some(pptx.to_string_lossy().as_ref()));
+    assert!(!h.state().session.active().unwrap().is_dirty());
+    assert_eq!(h.state().legacy_source(), None);
+    assert_eq!(std::fs::read(&original).unwrap(), LEGACY_PLAN, "the .ppt is never changed");
+    let back = deckcraft_engine::cmd::file::open_presentation("Plan.pptx", &std::fs::read(&pptx).unwrap()).unwrap();
+    assert_eq!(back.slides.len(), 3);
+    let title = back.slides[0].shapes.iter().find_map(|s| s.text.as_ref().map(|t| t.text())).unwrap_or_default();
+    assert_eq!(title, "Quarterly plan");
+    assert_eq!(back.slides[0].notes_text(), "Open with the numbers");
+    // Saved once as .pptx, it saves in place and the note is gone.
+    h.state_mut().run("app.backstage", json!({"page": "saveAs"})).unwrap();
+    h.run_steps(3);
+    assert!(h.query_by_label(note).is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// In OneOS the host opened Plan.ppt: Save hands back Plan.pptx as a new file (Save As), never
+/// a new version of the .ppt; a .pptx the host opened saves as a new version of itself.
+#[test]
+fn a_host_save_of_a_legacy_ppt_is_save_as_pptx() {
+    let got: Rc<RefCell<Vec<(String, bool, bool)>>> = Default::default();
+    let log = got.clone();
+    let services = Services {
+        host_save: Some(Box::new(move |name: &str, bytes: &[u8], save_as: bool| {
+            log.borrow_mut().push((name.to_string(), save_as, bytes.starts_with(b"PK\x03\x04")));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = SlideApp::new(Session::new(), services);
+    let data = deckcraft_engine::cmd::base64_encode(LEGACY_PLAN);
+    app.session.execute("file.openBytes", &json!({"name": "Plan.ppt", "data": data})).unwrap();
+    let uid = app.session.active().unwrap().uid;
+    app.host_doc = Some((uid, "Plan.ppt".into()));
+    app.run("slide.new", json!({})).unwrap();
+    app.save();
+    assert_eq!(*got.borrow(), vec![("Plan.pptx".to_string(), true, true)]);
+    assert!(!app.session.active().unwrap().is_dirty(), "the .pptx is the presentation's save");
+    // Save As in Slides's own format stays a copy.
+    got.borrow_mut().clear();
+    app.save_as_dialog("deckcraft");
+    let copies: Vec<(String, bool)> = got.borrow().iter().map(|(n, s, _)| (n.clone(), *s)).collect();
+    assert_eq!(copies, vec![("Plan.deckcraft".to_string(), true)]);
+}

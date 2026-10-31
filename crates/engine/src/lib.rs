@@ -232,6 +232,10 @@ pub struct DocState {
     /// The list AutoFormat just started from a typed `* ` or `1. `, so Backspace right after
     /// can put the typed text back.
     pub auto_list: Option<cmd::text::AutoList>,
+    /// The PowerPoint 97-2003 file (`.ppt`, `.pps`, `.pot`) this presentation was read from:
+    /// Slides never writes that format, so the presentation has no file to save to and a Save
+    /// writes `<stem>.pptx` beside it (files/973, 975).
+    pub legacy_source: Option<String>,
 }
 
 static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -261,6 +265,7 @@ impl DocState {
             compare: None,
             last_duplicate: None,
             auto_list: None,
+            legacy_source: None,
         }
     }
     pub fn is_dirty(&self) -> bool {

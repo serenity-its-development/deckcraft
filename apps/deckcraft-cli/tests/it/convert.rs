@@ -138,3 +138,35 @@ fn odp_opens_and_converts_to_pdf_pptx_and_outline() {
     assert!(std::fs::read(&png).unwrap().starts_with(b"\x89PNG"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// files/973, 975: a PowerPoint 97-2003 .ppt converts to .pptx (which reopens with its text) and
+/// to .pdf; the .ppt is only read.
+#[test]
+fn convert_reads_a_legacy_ppt() {
+    let dir = temp_dir("convert-ppt");
+    let input = dir.join("Plan.ppt");
+    let bytes: &[u8] = include_bytes!("../../../../crates/pptx/tests/fixtures/plan.ppt");
+    std::fs::write(&input, bytes).unwrap();
+
+    let pptx = dir.join("Plan.pptx");
+    let out = cli(&[Path::new("convert"), &input, &pptx]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let outline = dir.join("Plan.txt");
+    let out = cli(&[Path::new("convert"), &pptx, &outline]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let text = std::fs::read_to_string(&outline).unwrap();
+    for want in ["Quarterly plan", "Grow revenue", "Risks", "Supply delays"] {
+        assert!(text.contains(want), "{want} in {text}");
+    }
+
+    let pdf = dir.join("Plan.pdf");
+    let out = cli(&[Path::new("convert"), &input, &pdf]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
+    assert_eq!(std::fs::read(&input).unwrap(), bytes, "the .ppt is never written");
+
+    let back = dir.join("Back.ppt");
+    let out = cli(&[Path::new("convert"), &pptx, &back]);
+    assert!(!out.status.success() && !back.exists(), "Slides never writes a .ppt");
+    let _ = std::fs::remove_dir_all(&dir);
+}

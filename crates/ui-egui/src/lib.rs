@@ -151,6 +151,23 @@ fn is_presentation_name(lower: &str) -> bool {
         || lower.ends_with(".pptx")
         || lower.ends_with(".potx")
         || lower.ends_with(".ppsx")
+        || deckcraft_engine::cmd::file::is_legacy_name(lower)
+}
+
+/// What the Save dialog says about a presentation read from the PowerPoint 97-2003 file
+/// `source` (files/973, 975): it is saved as `<stem>.pptx` beside the original, which Slides
+/// never writes. `None` for any other file.
+pub fn legacy_save_note(source: &str) -> Option<String> {
+    use deckcraft_engine::cmd::file::{is_legacy_name, pptx_beside};
+    if !is_legacy_name(source) {
+        return None;
+    }
+    let name = |p: &str| std::path::Path::new(p).file_name().map_or_else(|| p.to_string(), |n| n.to_string_lossy().into_owned());
+    Some(format!(
+        "{} is an older PowerPoint file: it saves as {} beside the original, which is never changed.",
+        name(source),
+        name(&pptx_beside(source))
+    ))
 }
 
 /// File → Open keeps the requested operation: a presentation opens, an outline becomes slides.
@@ -1343,14 +1360,18 @@ impl SlideApp {
     }
 
     pub fn save_as_dialog(&mut self, format: &str) {
-        if self.host_save_active(true, if format == "pptx" { "pptx" } else { "deckcraft" }) {
+        let legacy = self.legacy_source();
+        // Save As .pptx on a presentation read from a .ppt is its save; any other type is a copy.
+        if self.host_save_active(legacy.is_none() || format != "pptx", if format == "pptx" { "pptx" } else { "deckcraft" }) {
             return;
         }
         let name = self.session.active().map(|d| d.title()).unwrap_or_else(|| "Presentation".into());
         let ext = if format == "pptx" { "pptx" } else { "deckcraft" };
         let suggested = format!("{name}.{ext}");
+        // A presentation read from a .ppt is saved as <stem>.pptx in the .ppt's folder.
+        let beside = legacy.filter(|_| ext == "pptx").map(|src| deckcraft_engine::cmd::file::pptx_beside(&src));
         if let Some(pick) = self.services.pick_save.as_mut() {
-            if let Some(path) = pick(&suggested) {
+            if let Some(path) = pick(beside.as_deref().unwrap_or(&suggested)) {
                 match self.session.execute("file.saveAs", &json!({"path": path})) {
                     Ok(_) => {
                         self.set_status(format!("Saved {path}"));
@@ -1394,8 +1415,20 @@ impl SlideApp {
                 Err(e) => self.set_status(e.to_string()),
             }
         } else {
-            self.save_as_dialog("deckcraft");
+            self.save_as_dialog(self.new_file_format());
         }
+    }
+
+    /// The PowerPoint 97-2003 file the active presentation was read from, while it has no file
+    /// of its own: Slides never writes that format, so a Save goes to `<stem>.pptx` beside it.
+    pub fn legacy_source(&self) -> Option<String> {
+        self.session.active().filter(|d| d.path.is_none()).and_then(|d| d.legacy_source.clone())
+    }
+
+    /// The format a Save without a file asks for: `.pptx` for a presentation read from a
+    /// `.ppt`, otherwise Slides's own.
+    fn new_file_format(&self) -> &'static str {
+        if self.legacy_source().is_some() { "pptx" } else { "deckcraft" }
     }
 
     /// Act on requests commands left for the UI.
@@ -1412,7 +1445,7 @@ impl SlideApp {
                 UiRequest::Message { text } => self.set_status(text),
                 UiRequest::PickFile { purpose } => {
                     if purpose == "saveAs" {
-                        self.save_as_dialog("deckcraft");
+                        self.save_as_dialog(self.new_file_format());
                     }
                 }
                 UiRequest::Media { action, shape, ms } => {
@@ -1553,10 +1586,16 @@ impl SlideApp {
     /// version of that file in its own format; anything else is a copy (`.pptx`). `false` when there is no host to take it.
     fn host_save_active(&mut self, as_copy: bool, copy_ext: &str) -> bool {
         let Some(save) = self.services.host_save.as_ref() else { return false };
+        let legacy = self.legacy_source();
         let Some(d) = self.session.active() else { return true };
         let uid = d.uid;
-        let (name, copy) = match &self.host_doc {
-            Some((u, n)) if *u == uid && !as_copy => (n.clone(), false),
+        // A presentation read from a .ppt is never saved back over it: Save writes <stem>.pptx,
+        // a new file (Save As), and that is the presentation's save (files/973, 975).
+        let beside = legacy.filter(|_| !as_copy).map(|src| deckcraft_engine::cmd::file::pptx_beside(&src));
+        let legacy_save = beside.is_some();
+        let (name, copy) = match (&self.host_doc, beside) {
+            (_, Some(beside)) => (std::path::Path::new(&beside).file_name().map_or(beside.clone(), |n| n.to_string_lossy().into_owned()), true),
+            (Some((u, n)), None) if *u == uid && !as_copy => (n.clone(), false),
             _ => (format!("{}.{copy_ext}", d.title()), true),
         };
         let ext = std::path::Path::new(&name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
@@ -1574,10 +1613,18 @@ impl SlideApp {
         };
         match save(&name, &bytes, copy) {
             Ok(()) => {
-                if !copy && let Ok(st) = self.session.doc_mut() {
+                if (!copy || legacy_save)
+                    && let Ok(st) = self.session.doc_mut()
+                {
                     st.saved_doc = st.doc.clone();
                 }
-                self.set_status(if copy { format!("Saved a copy as {name}") } else { "Saved".to_owned() });
+                self.set_status(if legacy_save {
+                    format!("Saved as {name}")
+                } else if copy {
+                    format!("Saved a copy as {name}")
+                } else {
+                    "Saved".to_owned()
+                });
             }
             Err(e) => self.set_status(e),
         }
@@ -2199,13 +2246,13 @@ mod browsetheme_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
-mod first_view_tests;
-#[cfg(test)]
 mod eyedropper_tests;
 #[cfg(test)]
 mod field_frame_tests;
 #[cfg(test)]
 mod find_dialog_tests;
+#[cfg(test)]
+mod first_view_tests;
 #[cfg(test)]
 mod gpu_lock;
 #[cfg(test)]

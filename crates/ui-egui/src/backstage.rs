@@ -931,6 +931,11 @@ fn save_as(app: &mut SlideApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
     let (title, path) = app.session.active().map(|d| (d.title(), d.path.clone())).unwrap_or_default();
     ui.label(RichText::new(&title).font(theme::font(15.0)).color(t.text));
     dim(ui, path.as_deref().unwrap_or("Not saved yet"));
+    // A presentation read from a .ppt: say where it saves, and that the original stays as it is.
+    if let Some(note) = app.legacy_source().as_deref().and_then(crate::legacy_save_note) {
+        ui.add_space(8.0);
+        ui.label(RichText::new(note).font(theme::font(12.5)).color(t.text));
+    }
     ui.add_space(14.0);
     let current = SAVE_TYPES.iter().find(|s| s.0 == bs.file_type).map_or(SAVE_TYPES[0].1, |s| s.1);
     ui.horizontal(|ui| {
@@ -1371,14 +1376,7 @@ fn account(app: &mut SlideApp, ui: &mut Ui) {
             dim(ui, &crate::dialogs::version_line());
             dim(ui, "Open source under MIT OR Apache-2.0. Not affiliated with Microsoft.");
             ui.add_space(14.0);
-            if task(
-                ui,
-                Icon::Help,
-                "About Slides",
-                "About Slides",
-                "The version, the people and models who built it, and where to find us.",
-                true,
-            ) {
+            if task(ui, Icon::Help, "About Slides", "About Slides", "The version, the people and models who built it, and where to find us.", true) {
                 let _ = app.run("app.about", json!({}));
             }
         });

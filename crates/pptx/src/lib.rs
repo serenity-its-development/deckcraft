@@ -15,6 +15,7 @@ pub mod odp;
 mod odp_write;
 mod opc;
 mod png;
+pub mod ppt;
 pub(crate) mod read;
 mod tables;
 mod write;
@@ -42,6 +43,8 @@ pub enum PptxError {
     Write(String),
     #[error("malformed XML: {0}")]
     Xml(String),
+    #[error("the presentation is password-protected")]
+    Encrypted,
 }
 
 /// Does this look like an OOXML package (zip with `[Content_Types].xml`)?

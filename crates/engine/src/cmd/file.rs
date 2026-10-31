@@ -156,6 +156,24 @@ pub fn open_checked(name: &str, bytes: &[u8]) -> Result<(Presentation, Damage)> 
     open_other(name, bytes).map(|(p, slides)| (p, Damage { media: vec![], slides }))
 }
 
+fn password_protected(name: &str) -> EngineError {
+    EngineError::Other(format!("{name} is password-protected. DeckCraft can't open password-protected presentations yet."))
+}
+
+/// The extensions of PowerPoint 97-2003's binary formats, which Slides reads but never writes.
+pub const LEGACY_EXTENSIONS: &[&str] = &["ppt", "pps", "pot"];
+
+/// Is `path` a PowerPoint 97-2003 binary file name (`.ppt`, `.pps`, `.pot`)?
+pub fn is_legacy_name(path: &str) -> bool {
+    std::path::Path::new(path).extension().and_then(|e| e.to_str()).is_some_and(|e| LEGACY_EXTENSIONS.iter().any(|l| e.eq_ignore_ascii_case(l)))
+}
+
+/// Where a presentation read from the legacy file `path` is saved: `<stem>.pptx` in the same
+/// folder (files/973, 975).
+pub fn pptx_beside(path: &str) -> String {
+    std::path::Path::new(path).with_extension("pptx").to_string_lossy().into_owned()
+}
+
 fn open_other(name: &str, bytes: &[u8]) -> Result<(Presentation, Vec<String>)> {
     if deckcraft_pptx::sniff(bytes) {
         let (mut p, lost_slides) = deckcraft_pptx::import_checked(bytes).map_err(|e| EngineError::Other(e.to_string()))?;
@@ -170,7 +188,15 @@ fn open_other(name: &str, bytes: &[u8]) -> Result<(Presentation, Vec<String>)> {
         return Ok((p, vec![]));
     }
     if deckcraft_pptx::is_encrypted(bytes) {
-        return Err(EngineError::Other(format!("{name} is password-protected. DeckCraft can't open password-protected presentations yet.")));
+        return Err(password_protected(name));
+    }
+    if deckcraft_pptx::ppt::sniff(bytes) {
+        let mut p = match deckcraft_pptx::ppt::import(bytes) {
+            Err(deckcraft_pptx::PptxError::Encrypted) => return Err(password_protected(name)),
+            r => r.map_err(|e| EngineError::Other(format!("{name}: {e}")))?,
+        };
+        deckcraft_format::repair(&mut p);
+        return Ok((p, vec![]));
     }
     let lower = name.to_ascii_lowercase();
     let rtf = deckcraft_format::rtf::sniff_rtf(bytes);
@@ -290,6 +316,8 @@ pub struct LoadedFile {
     pub native: bool,
     /// What the file had lost or damaged.
     pub damaged: Damage,
+    /// A PowerPoint 97-2003 file: read, never written back ([`DocState::legacy_source`]).
+    pub legacy: bool,
 }
 
 /// Read and parse the presentation at `path`.
@@ -298,17 +326,21 @@ pub fn read_presentation_file(path: &str) -> Result<LoadedFile> {
     let bytes = crate::io::read_file(path).map_err(EngineError::Other)?;
     let (doc, damaged) = open_checked(path, &bytes)?;
     let native = deckcraft_format::sniff(&bytes) || deckcraft_pptx::sniff(&bytes);
-    Ok(LoadedFile { path: path.to_string(), doc, native, damaged })
+    let legacy = !native && deckcraft_pptx::ppt::sniff(&bytes);
+    Ok(LoadedFile { path: path.to_string(), doc, native, damaged, legacy })
 }
 
 /// Add a loaded presentation as the active document: the shared end of `file.open` and
 /// `file.adopt`. A damaged file opens as an untitled repaired copy, so Save can't overwrite the
 /// original with the empty media.
 fn adopt_loaded(s: &mut Session, f: LoadedFile) -> Result<Value> {
-    let LoadedFile { path, doc, native, damaged } = f;
+    let LoadedFile { path, doc, native, damaged, legacy } = f;
     let keep_path = native && damaged.is_empty();
     let i = add_opened(s, &path, keep_path.then(|| path.clone()), doc);
     report_damage(s, &damaged)?;
+    if legacy {
+        mark_legacy(s, &path)?;
+    }
     let st = s.doc()?;
     Ok(json!({
         "document": i, "slides": st.doc.slides.len(), "missingFonts": st.missing_fonts,
@@ -347,7 +379,22 @@ fn open_bytes(s: &mut Session, p: &Value) -> Result<Value> {
     let (doc, damaged) = open_checked(name, &data)?;
     let i = add_opened(s, name, None, doc);
     report_damage(s, &damaged)?;
+    if deckcraft_pptx::ppt::sniff(&data) {
+        mark_legacy(s, name)?;
+    }
     Ok(json!({"document": i, "missingFonts": s.doc()?.missing_fonts, "damagedMedia": damaged.media, "lostSlides": damaged.slides}))
+}
+
+/// The active presentation was read from the PowerPoint 97-2003 file `path`: it has no file to
+/// save to (a Save writes `<stem>.pptx` beside it), and the user is told what was read.
+fn mark_legacy(s: &mut Session, path: &str) -> Result<()> {
+    let st = s.doc_mut()?;
+    st.legacy_source = Some(path.to_string());
+    let name = std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+    s.ui_requests.push(crate::UiRequest::Message {
+        text: format!("{name} is an older PowerPoint file: its slide text and speaker notes were read; pictures, drawings and formatting were not."),
+    });
+    Ok(())
 }
 
 /// Tell the user which pictures, media and slides a damaged file lost, and mark the copy repaired.
@@ -509,6 +556,8 @@ fn mark_saved(s: &mut Session, path: Option<String>) -> Result<()> {
     st.saved_doc = st.doc.clone();
     if path.is_some() {
         st.path = path;
+        // Saved to a file of its own: the legacy file it was read from is behind it.
+        st.legacy_source = None;
     }
     st.revision += 1;
     let uid = st.uid;
@@ -528,6 +577,11 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
         s.ui_requests.push(crate::UiRequest::PickFile { purpose: "saveAs".into() });
         return Ok(json!({"needsPath": true}));
     };
+    if is_legacy_name(&path) {
+        let name = std::path::Path::new(&path).file_name().map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+        let beside = std::path::Path::new(&pptx_beside(&path)).file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        return Err(bad("file.save", format!("{name} is an older PowerPoint file, which Slides opens but doesn't write: save it as {beside}")));
+    }
     let format = str_param(p, "format").unwrap_or(format_for_path(&path));
     let bytes = save_bytes(&s.doc()?.doc, format)?;
     write_file(&path, &bytes)?;
