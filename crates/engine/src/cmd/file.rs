@@ -127,7 +127,7 @@ fn new(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// Recognise and read presentation bytes (native, PPTX).
+/// Recognise and read presentation bytes (native, PPTX, ODP).
 pub fn open_presentation(name: &str, bytes: &[u8]) -> Result<Presentation> {
     open_checked(name, bytes).map(|(p, _)| p)
 }
@@ -162,6 +162,11 @@ fn open_other(name: &str, bytes: &[u8]) -> Result<(Presentation, Vec<String>)> {
         deckcraft_format::repair(&mut p);
         probe_clips(&mut p);
         return Ok((p, lost_slides));
+    }
+    if deckcraft_pptx::odp::sniff(bytes) {
+        let mut p = deckcraft_pptx::odp::import(bytes).map_err(|e| EngineError::Other(format!("{name}: {e}")))?;
+        deckcraft_format::repair(&mut p);
+        return Ok((p, vec![]));
     }
     if deckcraft_pptx::is_encrypted(bytes) {
         return Err(EngineError::Other(format!("{name} is password-protected. DeckCraft can't open password-protected presentations yet.")));

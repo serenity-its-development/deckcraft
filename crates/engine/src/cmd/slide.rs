@@ -115,6 +115,27 @@ fn new(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         };
+        // A `title` or `body` needs a placeholder to go into. A layout that has none (Blank, a
+        // picture layout) never drops the text without saying: a layout the caller named is
+        // refused by name, and the inherited one gives way to the master's nearest layout that
+        // has the placeholders (Title and Content, then Title Only, then any).
+        let wants_title = str_param(p, "title").is_some();
+        let wants_body = str_param(p, "body").is_some();
+        let layout = if layout_fits(doc, layout, wants_title, wants_body) {
+            layout
+        } else if let Some(k) = p.get("layout") {
+            let missing = if wants_title && !layout_fits(doc, layout, true, false) { "a title" } else { "a body" };
+            return Err(bad(
+                "slide.new",
+                format!(
+                    "layout {k} has no placeholder for {missing}: pick a layout with one (titleAndContent, titleOnly) or add the text with a text box"
+                ),
+            ));
+        } else {
+            fitting_layout(doc, master, wants_title, wants_body).ok_or_else(|| {
+                bad("slide.new", "no layout in this master has a placeholder for the title or body given; add the text with a text box")
+            })?
+        };
         let mut slide = defaults::new_slide(doc, layout).ok_or_else(|| bad("slide.new", NO_ID_SPACE))?;
         if let Some(t) = str_param(p, "title")
             && let Some(sh) = slide.shapes.iter_mut().find(|x| x.ph_type().is_some_and(|k| k.is_title()))
@@ -156,6 +177,29 @@ fn new(s: &mut Session, p: &Value) -> Result<Value> {
         sel.target = Target::Slides;
         Ok(json!({"index": at, "id": id}))
     })
+}
+
+/// Does `layout` have a title placeholder (when `title`) and a body one (when `body`)?
+fn layout_fits(doc: &Presentation, layout: LayoutId, title: bool, body: bool) -> bool {
+    let Some((_, l)) = doc.layout(layout) else { return !title && !body };
+    let has = |want_title: bool| {
+        l.shapes
+            .iter()
+            .filter_map(|s| s.ph.as_ref())
+            .any(|ph| if want_title { ph.kind.is_title() } else { !ph.kind.is_title() && !ph.kind.is_footer_kind() })
+    };
+    (!title || has(true)) && (!body || has(false))
+}
+
+/// The master's layout for a new slide whose current layout can't hold its `title`/`body`.
+fn fitting_layout(doc: &Presentation, master: usize, title: bool, body: bool) -> Option<LayoutId> {
+    let m = doc.masters.get(master).or_else(|| doc.masters.first())?;
+    let fits = |l: &&deckcraft_model::Layout| layout_fits(doc, l.id, title, body);
+    [LayoutType::TitleAndContent, LayoutType::TitleOnly]
+        .iter()
+        .find_map(|k| m.layouts.iter().filter(|l| l.kind == *k).find(fits))
+        .or_else(|| m.layouts.iter().find(fits))
+        .map(|l| l.id)
 }
 
 /// The placeholder a new slide's `body` goes into: the layout's main content placeholder.
@@ -665,6 +709,43 @@ mod tests {
                 assert_eq!(s.doc().expect("doc").doc.slides.len(), 3, "{cmd} {p}");
             }
         }
+    }
+
+    /// Corpus D2 (pptx/shapes.pptx): `slide.new {title}` after a Blank slide added a Blank slide
+    /// and dropped the title without saying so.
+    #[test]
+    fn new_slide_after_a_blank_one_keeps_its_title() {
+        let mut s = Session::with_new();
+        s.execute("slide.new", &json!({"layout": "blank"})).expect("blank slide");
+        let r = s.execute("slide.new", &json!({"title": "CORPUSEDIT", "body": "point"})).expect("new slide");
+        let st = s.doc().expect("doc");
+        let i = r["index"].as_u64().expect("index") as usize;
+        let slide = &st.doc.slides[i];
+        assert_eq!(slide.title(), "CORPUSEDIT");
+        let kind = st.doc.layout(slide.layout).map(|(_, l)| l.kind);
+        assert_eq!(kind, Some(deckcraft_model::LayoutType::TitleAndContent));
+        assert!(slide.shapes.iter().any(|x| x.text.as_ref().is_some_and(|t| t.text() == "point")));
+        // Without text the current (Blank) layout is still followed, as PowerPoint does.
+        s.execute("slide.go", &json!({"index": 1})).expect("go");
+        s.execute("slide.new", &json!({"layout": "blank"})).expect("blank");
+        let r = s.execute("slide.new", &json!({})).expect("plain new slide");
+        let st = s.doc().expect("doc");
+        let l = st.doc.slides[r["index"].as_u64().expect("index") as usize].layout;
+        assert_eq!(st.doc.layout(l).map(|(_, l)| l.kind), Some(deckcraft_model::LayoutType::Blank));
+        // A title-only ask lands on a layout with a title too.
+        let r = s.execute("slide.new", &json!({"title": "Only"})).expect("title only");
+        assert_eq!(s.doc().expect("doc").doc.slides[r["index"].as_u64().expect("index") as usize].title(), "Only");
+    }
+
+    #[test]
+    fn new_slide_on_a_named_layout_without_the_placeholder_refuses() {
+        let mut s = Session::with_new();
+        let before = s.doc().expect("doc").doc.slides.len();
+        let e = s.execute("slide.new", &json!({"layout": "blank", "title": "Lost?"})).expect_err("refused");
+        assert!(e.to_string().contains("no placeholder for a title"), "{e}");
+        let e = s.execute("slide.new", &json!({"layout": "titleOnly", "body": "Lost?"})).expect_err("refused");
+        assert!(e.to_string().contains("no placeholder for a body"), "{e}");
+        assert_eq!(s.doc().expect("doc").doc.slides.len(), before, "nothing was added");
     }
 
     #[test]

@@ -127,10 +127,12 @@ Detail in [file-format-parity.md](file-format-parity.md).
 - **Estimate:** 20–35 h (import only, from the public [MS-PPT] spec). Owner decision whether it's
   worth it.
 
-### No OpenDocument `.odp`
-- **Evidence:** PowerPoint opens and saves `.odp`.
+### OpenDocument `.odp` opens but doesn't save
+- **Evidence:** PowerPoint opens and saves `.odp`. DeckCraft reads the common subset
+  (`crates/pptx/src/odp.rs`) and converts it to `.pptx`, PDF and images; it can't write `.odp`, and
+  ODP animations, transitions, charts and OLE objects are not read.
 - **Impact:** LibreOffice users and public-sector exchange.
-- **Estimate:** 12–20 h (read and write the common subset).
+- **Estimate:** 8–14 h (write the common subset; read animations and charts).
 
 ### PDF export rasterizes slide artwork
 - **Evidence:** `crates/pdf` places each slide as an image under a selectable text layer, links and
